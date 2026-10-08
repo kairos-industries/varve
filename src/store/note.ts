@@ -9,6 +9,8 @@ export interface Note {
   path: string;
   fm: Frontmatter;
   body: string;
+  /** Set when the frontmatter could not be parsed; the note is then ignored by the server. */
+  error?: string;
 }
 
 export function hashBody(body: string): string {
@@ -20,8 +22,12 @@ const FM_RE = /^---\n([\s\S]*?)\n---\n?/;
 export function parseNote(path: string, text: string): Note {
   const m = FM_RE.exec(text);
   if (!m) return { path, fm: {}, body: text };
-  const fm = (parse(m[1] ?? "") as Frontmatter | null) ?? {};
-  return { path, fm, body: text.slice(m[0].length) };
+  try {
+    const fm = (parse(m[1] ?? "") as Frontmatter | null) ?? {};
+    return { path, fm: typeof fm === "object" ? fm : {}, body: text.slice(m[0].length) };
+  } catch (err) {
+    return { path, fm: {}, body: text.slice(m[0].length), error: err instanceof Error ? err.message.split("\n")[0] : String(err) };
+  }
 }
 
 export function readNote(path: string): Note | undefined {

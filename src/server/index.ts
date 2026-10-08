@@ -218,7 +218,9 @@ export function createServer(session: AtlasSession): McpServer {
 }
 
 export function atlasDir(env: NodeJS.ProcessEnv = process.env): string {
-  return env.TEMPORAL_ATLAS_DIR || `${env.HOME ?? ""}/TemporalAtlas`;
+  const home = env.HOME ?? env.USERPROFILE ?? "";
+  const dir = env.TEMPORAL_ATLAS_DIR || `${home}/TemporalAtlas`;
+  return dir.replace(/^~(?=$|[\\/])/, home);
 }
 
 /** Start the server over stdio for the agent that launched this process. */

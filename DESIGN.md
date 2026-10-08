@@ -1,6 +1,6 @@
 # Temporal Atlas design (v1)
 
-Status: proposed, awaiting confirmation. Terms in this document are defined in [CONTEXT.md](CONTEXT.md).
+Status: accepted; v0.1 implements it. Terms in this document are defined in [CONTEXT.md](CONTEXT.md).
 
 ## What it is
 
@@ -83,7 +83,7 @@ The server rejects a `seal` whose content exceeds 150% of the length target and 
 
 ### Draft and sealed notes
 
-An open period's note is a draft. The server assembles it without a model by listing the headlines and summaries of its children (sessions for a day, day notes and today's draft for a week, and so on). Drafts are written to disk so they show in Obsidian, and the server regenerates them whenever a source changes.
+An open period's note is a draft. The server assembles it without a model by listing the headlines and summaries of its children (sessions for a day, day notes and today's draft for a week, and so on). Drafts are written to disk so they show in Obsidian. The server regenerates them when a session closes or a period is sealed, and `brief` and `zoom` build drafts fresh on every call.
 
 If a human edits a draft (its body no longer matches `atlas_hash`), the server stops regenerating it and passes the edited text to the rollup as an extra source.
 
@@ -105,7 +105,9 @@ When a session starts, the server picks its scope in this order:
 4. The working directory name, unless it is the home directory.
 5. `general`.
 
-An agent can set the scope on its first `log` call when the client gives no working directory (Claude Desktop, chat apps). The `scopes` tool can rename scopes, mark them isolated, and merge them. A merge adds a rule to `scopes.json` so several repositories can share one scope.
+An agent can set the scope on its first `log` call when the client gives no working directory (Claude Desktop, chat apps). Each session note records its origin (git remote or folder).
+
+The `scopes` tool can mark a scope isolated, map the current folder to a scope for future sessions (`mapHere`), and merge one scope into another (`mergeInto`). Merging into a name that has no notes yet is a rename. A merge moves the sessions, adds rules for their origins to `scopes.json`, and marks overlapping sealed notes in the target stale.
 
 ### Visibility
 
@@ -128,8 +130,8 @@ Index notes are assembled without a model. Each one lists, for its period, the `
 1. **Start.** On connect, the server registers the session in `.atlas/sessions.json` but writes no file. If the Claude Code adapter is installed, the `SessionStart` hook has already recorded the client session id, working directory and transcript path, and the server links to that record.
 2. **First write.** The first `log` or `close_session` call creates the session note.
 3. **During the session.** `log(type, text, topics?)` appends a timestamped event to the current segment.
-4. **Day change.** On the first tool call after a day boundary, the server opens a new segment and attaches a checkpoint notice to the tool result. The notice asks the agent to summarize the finished segment with `close_session(summary, segment)` and lists any pending rollups.
-5. **Close.** `close_session(summary)` writes the summary for the current segment and marks the session closed. A client disconnect, or the `SessionEnd` hook, also closes it.
+4. **Day change.** On the first tool call after a day boundary, the server opens a new segment and attaches a checkpoint notice to the tool result. The notice asks the agent to summarize the finished segment with `close_session(headline, summary, segment)` and lists any pending rollups.
+5. **Close.** `close_session(headline, summary)` writes the summary for the current segment and marks the session closed. Headings in the summary are demoted below the note's own sections. A client disconnect, or the `SessionEnd` hook, also closes it.
 
 A session note has one `## <date>` section per segment, each with a summary (goal, what was done, decisions and why, files and artifacts touched, open threads, topic links) and its events.
 
@@ -149,7 +151,9 @@ A pending rollup is one of:
 
 - a closed period with no sealed note,
 - a sealed note marked stale,
-- an orphan session (summarized from its transcript, with tool output removed).
+- an orphan session (summarized from its transcript, with tool output removed). Sessions whose transcript has less than 2,000 characters of conversation are skipped as trivial.
+
+Rollups run per scope: `pending()` covers the session's own scope and `pending(all: true)` every scope the session can see.
 
 The server works through pending rollups from the oldest period first and from the lowest layer up. A day is sealed before its week and month, and a month before its year.
 
@@ -198,7 +202,7 @@ When a client connects, the server builds the brief for the detected scope and r
 | Day | today's draft and the last worked day |
 | Week | this week's draft and last week |
 | Month | this month's draft and last month |
-| Year | the current year, once it has a sealed month |
+| Year | the sealed months of the current year, once there is one |
 | Index | this week's headlines from other visible scopes |
 
 "Last worked day" is the most recent day with sessions in the scope, so a brief on Monday shows Friday. `lookback` sets how many closed periods each layer shows, default 1.
@@ -243,14 +247,14 @@ All tools are scoped to the session's scope unless they take a `scope` argument,
 |---|---|---|
 | `brief` | `scope?`, `lookback?` | the layered brief |
 | `log` | `type`, `text`, `topics?`, `scope?` (first call only) | the event as written |
-| `close_session` | `summary`, `segment?` | confirmation and pending rollups |
+| `close_session` | `headline`, `summary`, `segment?` | confirmation and pending rollups |
 | `pending` | none | pending rollups with estimates, each `auto` or `needs_confirmation` |
 | `summarize` | `period`, `scope?`, `confirmed?` | the source notes, the length target and writing instructions |
 | `seal` | `period`, `content`, `headline`, `scope?`, `topic_updates?` | the sealed note's path and any newly unblocked rollups |
 | `zoom` | `period`, `scope?` | the note and its children |
 | `search` | `query`, `scope?`, `layer?`, `from?`, `to?` | ranked results |
 | `topic` | `name`, `scope?`, `update?`, `force?` | the topic note, or similar existing topics |
-| `scopes` | `set?` (rename, isolate, merge) | the scope list with visibility |
+| `scopes` | `set?` (`isolated`, `mapHere`, `mergeInto`) | the scope list with visibility and rules |
 | `amend` | `note`, `change`, `reason` | the amended note and the notes now stale |
 
 The server uses only tools, no MCP resources or prompts, so it behaves the same in every client.
@@ -332,7 +336,7 @@ Later:
 
 ## 16. To verify during the build
 
-- How the MCP server process links to the Claude Code session id. Options: an environment variable passed to MCP servers, a shared parent process, or matching on working directory and start time.
+- How the MCP server process links to the Claude Code session id. Claude Code sets `CLAUDE_CODE_SESSION_ID` for the processes it starts (confirmed for shell commands); the server reads it. To confirm for MCP servers in the end-to-end check.
 - Whether Claude Code starts stdio MCP servers in the project directory (scope detection depends on it).
 - Whether Claude Code or other clients truncate long server `instructions`.
 - The `SessionEnd` hook payload.

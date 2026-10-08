@@ -355,7 +355,7 @@ export class AtlasSession {
     const day = input.segment ?? today;
     const seg = this.segment(s, day);
     seg.headline = this.atlas.scrub(input.headline.replace(/\s*\n\s*/g, " ").trim());
-    seg.summary = this.atlas.scrub(input.summary.trim());
+    seg.summary = this.atlas.scrub(demoteHeadings(input.summary.trim()));
     if (day === today) {
       s.fm.status = "closed";
       s.fm.ended = this.atlas.stamp();
@@ -513,6 +513,11 @@ export class AtlasSession {
     }
     return lines.length ? `[Temporal Atlas checkpoint]\n${lines.join("\n")}` : undefined;
   }
+}
+
+/** Headings inside a session summary sit below the note's own ### sections. */
+function demoteHeadings(md: string): string {
+  return md.replace(/^#{1,3} /gm, "#### ");
 }
 
 export function newSessionId(): string {
