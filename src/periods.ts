@@ -98,7 +98,7 @@ export class ScopeView {
         ? this.segmentsOn(period).map((x) => segmentHeadline(x.segment))
         : this.childPeriods(period).map((c) => this.headline(c));
     const text = parts.join("; ");
-    const label = layer === "day" ? `${parts.length} session${parts.length === 1 ? "" : "s"}` : `${parts.length} ${layer === "year" ? "months" : "days"}`;
+    const label = layer === "day" ? `${parts.length} session${parts.length === 1 ? "" : "s"}` : `${parts.length} ${layer === "year" ? "month" : "day"}${parts.length === 1 ? "" : "s"}`;
     const joined = `${label}: ${text}`;
     return joined.length > 200 ? `${joined.slice(0, 197)}...` : joined;
   }

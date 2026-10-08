@@ -3,7 +3,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { type AtlasConfig, loadConfig } from "./config.js";
 import { scrub } from "./scrub/index.js";
+import { buildBrief } from "./brief.js";
 import { amend, type AmendInput, scanEdits } from "./edits.js";
+import { search } from "./search.js";
+import { zoom } from "./zoom.js";
 import { allScopes, refreshAround, writeIndex } from "./periods.js";
 import { transcriptText } from "./sessions/transcript.js";
 import { pending, seal, type SealInput, summarize } from "./rollup/index.js";
@@ -174,6 +177,13 @@ export class Atlas {
     return { result: "orphan", path };
   }
 }
+
+const USAGE = `Temporal Atlas is your memory of past work, layered by time: sessions, days, weeks, months, years. The current scope is "{scope}".
+- During work, call log for each decision (with the reason), notable change, finding or todo.
+- Before you finish, call close_session with a one-line headline and a summary using ### Done, ### Decisions, ### Open threads.
+- If a tool result reports pending rollups, work through them with summarize and seal. Past the cost gate, ask the user first.
+- For more history: brief (wider view), zoom (open any period or session), search (keywords), topic (durable knowledge).
+`;
 
 export interface HookInput {
   sessionId: string;
@@ -359,6 +369,34 @@ export class AtlasSession {
     const scopes = opts.all ? this.visibleScopes() : [this.scope];
     for (const scope of scopes) scanEdits(this.atlas, scope);
     return pending(this.atlas, scopes);
+  }
+
+  brief(input: { scope?: string; lookback?: number } = {}) {
+    const scope = this.resolveScope(input.scope);
+    for (const sc of this.visibleScopes()) scanEdits(this.atlas, sc);
+    return buildBrief(this.atlas, {
+      scope,
+      visible: this.visibleScopes(),
+      lookback: input.lookback,
+      capTokens: this.atlas.config.briefTokens.tool,
+    });
+  }
+
+  /** The text returned as MCP server instructions: a compact brief plus how to use the tools. */
+  instructions(): string {
+    const usage = USAGE.replace("{scope}", this.scope);
+    const cap = this.atlas.config.briefTokens.instructions - Math.ceil(usage.length / 4);
+    const brief = buildBrief(this.atlas, { scope: this.scope, visible: this.visibleScopes(), compact: true, capTokens: cap });
+    return `${usage}\n${brief}`;
+  }
+
+  zoom(input: { period: string; scope?: string }) {
+    return zoom(this.atlas, this.resolveScope(input.scope), input.period);
+  }
+
+  search(input: { query: string; scope?: string; layer?: string; from?: string; to?: string; limit?: number }) {
+    const scopes = input.scope ? [this.resolveScope(input.scope)] : this.visibleScopes();
+    return search(this.atlas, { ...input, scopes });
   }
 
   amend(input: AmendInput & { scope?: string }) {
