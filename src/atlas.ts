@@ -3,7 +3,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { type AtlasConfig, loadConfig } from "./config.js";
 import { scrub } from "./scrub/index.js";
-import { detectScope, GENERAL, readScopes, type ScopesFile, slug } from "./scopes/index.js";
+import { amend, type AmendInput, scanEdits } from "./edits.js";
+import { allScopes, refreshAround, writeIndex } from "./periods.js";
+import { transcriptText } from "./sessions/transcript.js";
+import { pending, seal, type SealInput, summarize } from "./rollup/index.js";
+import { canRead, detectScope, GENERAL, readScopes, type ScopesFile, slug, writeScopes } from "./scopes/index.js";
 import {
   parseSession,
   saveSession,
@@ -11,7 +15,8 @@ import {
   type SessionNote,
 } from "./sessions/note.js";
 import { withMutex } from "./store/lock.js";
-import { listMarkdown, readNote } from "./store/note.js";
+import { listMarkdown, readNote, writeNote } from "./store/note.js";
+import { join } from "node:path";
 import { AtlasPaths } from "./store/paths.js";
 import { type Clock, dayOf, systemClock, wallClock } from "./time/index.js";
 
@@ -43,6 +48,10 @@ export class Atlas {
     this.paths = new AtlasPaths(opts.dir);
     this.config = loadConfig(opts.dir, opts.config);
     this.clock = opts.clock ?? systemClock;
+  }
+
+  get root(): string {
+    return this.paths.root;
   }
 
   now(): Date {
@@ -100,6 +109,85 @@ export class Atlas {
   session(opts: SessionOptions = {}): AtlasSession {
     return new AtlasSession(this, opts);
   }
+
+  // ---- hooks ----
+
+  hookStart(input: HookInput) {
+    const scope = detectScope(input.cwd, this.scopes()).scope;
+    this.updateRegistry((reg) => {
+      const prev = reg[input.sessionId];
+      reg[input.sessionId] = {
+        ...prev,
+        id: prev?.id ?? newSessionId(),
+        scope: prev?.scope ?? scope,
+        cwd: input.cwd ?? prev?.cwd,
+        clientSessionId: input.sessionId,
+        client: input.client ?? prev?.client ?? "claude-code",
+        transcript: input.transcriptPath ?? prev?.transcript,
+        startedAt: prev?.startedAt ?? this.stamp(),
+      };
+      pruneRegistry(reg, this.now());
+    });
+    return { scope };
+  }
+
+  hookEnd(input: HookInput) {
+    const entry = this.updateRegistry((reg) => {
+      const e = reg[input.sessionId];
+      delete reg[input.sessionId];
+      return e;
+    });
+    const transcript = input.transcriptPath ?? entry?.transcript;
+    if (entry?.path && existsSync(entry.path)) {
+      const s = parseSession(readNote(entry.path)!);
+      s.fm.status = "closed";
+      s.fm.ended ??= this.stamp();
+      if (transcript) s.fm.transcript = transcript;
+      saveSession(s);
+      refreshAround(this, String(s.fm.scope), s.segments.map((x) => x.day));
+      return { result: "closed", path: entry.path };
+    }
+    if (!transcript || transcriptText(transcript, this.config.orphanMinChars + 1).length < this.config.orphanMinChars) {
+      return { result: "skipped" };
+    }
+    const scope = entry?.scope ?? detectScope(input.cwd, this.scopes()).scope;
+    const started = entry?.startedAt ? new Date(entry.startedAt) : this.now();
+    const id = entry?.id ?? newSessionId();
+    const { date, time } = wallClock(started, this.config);
+    const path = this.paths.sessionNote(scope, date, time, id);
+    writeNote(
+      path,
+      {
+        atlas: "session",
+        scope,
+        session: id,
+        started: this.stamp(started),
+        ended: this.stamp(),
+        status: "closed",
+        client: entry?.client ?? "claude-code",
+        client_session_id: input.sessionId,
+        transcript,
+        days: [dayOf(started, this.config)],
+      },
+      `# Session ${date} ${time}\n\nRecorded by a hook only. Summarize it from its transcript.\n`,
+    );
+    return { result: "orphan", path };
+  }
+}
+
+export interface HookInput {
+  sessionId: string;
+  cwd?: string;
+  transcriptPath?: string;
+  client?: string;
+}
+
+const REGISTRY_TTL_MS = 7 * 24 * 3600 * 1000;
+
+function pruneRegistry(reg: Registry, now: Date) {
+  for (const [key, e] of Object.entries(reg)) {
+    if (now.getTime() - new Date(e.startedAt).getTime() > REGISTRY_TTL_MS) delete reg[key];
+  }
 }
 
 export interface SessionOptions {
@@ -143,7 +231,7 @@ export class AtlasSession {
     this.client = opts.client;
     this.key = opts.clientSessionId ?? `mcp-${randomBytes(6).toString("hex")}`;
     const fromHook = opts.clientSessionId ? atlas.readRegistry()[opts.clientSessionId] : undefined;
-    this.id = fromHook?.id ?? randomId();
+    this.id = fromHook?.id ?? newSessionId();
     this.cwd = opts.cwd ?? fromHook?.cwd;
     this.transcript = opts.transcript ?? fromHook?.transcript;
     this.scope = fromHook?.scope ?? detectScope(this.cwd, atlas.scopes()).scope;
@@ -245,11 +333,80 @@ export class AtlasSession {
       s.fm.ended = this.atlas.stamp();
     }
     saveSession(s);
-    return { session: this.id, scope: this.scope, segment: day, closed: day === today };
+    refreshAround(this.atlas, this.scope, s.segments.map((x) => x.day));
+    const checkpoint = this.pending();
+    return { session: this.id, scope: this.scope, segment: day, closed: day === today, pending: checkpoint };
+  }
+
+  /** Scopes this session may read. */
+  visibleScopes(): string[] {
+    const file = this.atlas.scopes();
+    return [...new Set([...allScopes(this.atlas), this.scope, GENERAL])].filter((s) => canRead(this.scope, s, file)).sort();
+  }
+
+  /** Resolve an optional scope argument, enforcing visibility. */
+  resolveScope(scope?: string): string {
+    if (!scope) return this.scope;
+    const target = slug(scope);
+    if (!canRead(this.scope, target, this.atlas.scopes())) {
+      throw new Error(`Scope "${target}" is isolated and cannot be read from scope "${this.scope}".`);
+    }
+    return target;
+  }
+
+  /** Pending rollups for this scope, or for every visible scope with `all`. */
+  pending(opts: { all?: boolean } = {}) {
+    const scopes = opts.all ? this.visibleScopes() : [this.scope];
+    for (const scope of scopes) scanEdits(this.atlas, scope);
+    return pending(this.atlas, scopes);
+  }
+
+  amend(input: AmendInput & { scope?: string }) {
+    return amend(this.atlas, this.resolveScope(input.scope), input);
+  }
+
+  /** Called when the client disconnects. */
+  disconnect() {
+    if (!this.path) return;
+    const note = readNote(this.path);
+    if (!note || note.fm.status === "closed") return;
+    const s = parseSession(note);
+    s.fm.status = "closed";
+    s.fm.ended = this.atlas.stamp();
+    saveSession(s);
+    refreshAround(this.atlas, this.scope, s.segments.map((x) => x.day));
+  }
+
+  summarize(input: { period: string; scope?: string; confirmed?: boolean }) {
+    return summarize(this.atlas, this.key, this.resolveScope(input.scope), input.period, input.confirmed);
+  }
+
+  seal(input: SealInput & { scope?: string }) {
+    return seal(this.atlas, this.key, this.resolveScope(input.scope), input);
+  }
+
+  scopes(input: { set?: { scope: string; isolated?: boolean } } = {}) {
+    if (input.set) {
+      const target = slug(input.set.scope);
+      const file = this.atlas.scopes();
+      if (input.set.isolated !== undefined) {
+        file.scopes[target] = { ...file.scopes[target], isolated: input.set.isolated };
+        writeScopes(this.atlas.paths.scopesFile, file);
+        for (const p of listMarkdown(join(this.atlas.root, "index"))) {
+          const period = readNote(p)?.fm.period;
+          if (typeof period === "string") writeIndex(this.atlas, period);
+        }
+      }
+    }
+    const file = this.atlas.scopes();
+    return {
+      current: this.scope,
+      scopes: this.visibleScopes().map((name) => ({ name, isolated: Boolean(file.scopes[name]?.isolated) })),
+    };
   }
 }
 
-function randomId(): string {
+export function newSessionId(): string {
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
   return Array.from(randomBytes(6), (b) => alphabet[b % alphabet.length]).join("");
 }

@@ -30,7 +30,7 @@ describe("recording a session", () => {
     t.at("2026-10-08T09:10:00+02:00");
     s.log({ type: "change", text: "Next morning" });
 
-    const text = t.read(t.files("scopes")[0]!);
+    const text = t.read(t.files("scopes/alpha/sessions")[0]!);
     const seventh = text.indexOf("## 2026-10-07");
     const eighth = text.indexOf("## 2026-10-08");
     expect(seventh).toBeGreaterThan(-1);
@@ -45,7 +45,7 @@ describe("recording a session", () => {
     s.log({ type: "note", text: "start" });
     s.closeSession({ headline: "Built the time model", summary: "### Done\n- time module\n\n### Open threads\n- DST tests" });
 
-    const text = t.read(t.files("scopes")[0]!);
+    const text = t.read(t.files("scopes/alpha/sessions")[0]!);
     expect(text).toContain("status: closed");
     expect(text).toContain("Built the time model");
     expect(text).toContain("- DST tests");
@@ -58,7 +58,7 @@ describe("recording a session", () => {
     t.at("2026-10-08T09:00:00+02:00");
     s.closeSession({ headline: "Evening on the parser", summary: "Parser done.", segment: "2026-10-07" });
 
-    const text = t.read(t.files("scopes")[0]!);
+    const text = t.read(t.files("scopes/alpha/sessions")[0]!);
     expect(text).toContain("status: open");
     expect(text).toContain("Evening on the parser");
   });
@@ -68,14 +68,14 @@ describe("recording a session", () => {
     const s = t.atlas.session({ cwd: t.cwd("alpha") });
     s.closeSession({ headline: "Done", summary: "x" });
     s.log({ type: "note", text: "one more thing" });
-    expect(t.read(t.files("scopes")[0]!)).toContain("status: open");
+    expect(t.read(t.files("scopes/alpha/sessions")[0]!)).toContain("status: open");
   });
 
   it("scrubs secrets from logged text", () => {
     const t = setup("2026-10-08T14:32:00+02:00");
     const s = t.atlas.session({ cwd: t.cwd("alpha") });
     s.log({ type: "finding", text: "the key was sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWx" });
-    expect(t.read(t.files("scopes")[0]!)).toContain("[redacted:anthropic]");
+    expect(t.read(t.files("scopes/alpha/sessions")[0]!)).toContain("[redacted:anthropic]");
   });
 
   it("lets the agent name the scope on the first log when there is no working directory", () => {
