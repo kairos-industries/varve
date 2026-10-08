@@ -340,4 +340,4 @@ Later:
 
 ## 17. Publishing
 
-MIT license. The repository owner (personal or company GitHub) is undecided. Nothing gets pushed or published to npm until the owner decides.
+MIT license. The repository is private at `pomess/temporal-atlas` for now. Making it public and publishing to npm are separate decisions still to be made.
