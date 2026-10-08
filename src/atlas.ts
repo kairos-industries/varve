@@ -6,11 +6,13 @@ import { scrub } from "./scrub/index.js";
 import { buildBrief } from "./brief.js";
 import { amend, type AmendInput, scanEdits } from "./edits.js";
 import { search } from "./search.js";
+import { mergeScope, rebuildIndexes } from "./scopes/manage.js";
+import { topic, type TopicUpdate, topicScopes } from "./topics.js";
 import { zoom } from "./zoom.js";
 import { allScopes, refreshAround, writeIndex } from "./periods.js";
 import { transcriptText } from "./sessions/transcript.js";
 import { pending, seal, type SealInput, summarize } from "./rollup/index.js";
-import { canRead, detectScope, GENERAL, readScopes, type ScopesFile, slug, writeScopes } from "./scopes/index.js";
+import { canRead, detectScope, GENERAL, readScopes, type ScopeRule, type ScopesFile, slug, writeScopes } from "./scopes/index.js";
 import {
   parseSession,
   saveSession,
@@ -18,7 +20,7 @@ import {
   type SessionNote,
 } from "./sessions/note.js";
 import { withMutex } from "./store/lock.js";
-import { listMarkdown, readNote, writeNote } from "./store/note.js";
+import { link, listMarkdown, readNote, writeNote } from "./store/note.js";
 import { join } from "node:path";
 import { AtlasPaths } from "./store/paths.js";
 import { type Clock, dayOf, systemClock, wallClock } from "./time/index.js";
@@ -185,6 +187,15 @@ const USAGE = `Temporal Atlas is your memory of past work, layered by time: sess
 - For more history: brief (wider view), zoom (open any period or session), search (keywords), topic (durable knowledge).
 `;
 
+export interface ScopeChange {
+  scope: string;
+  isolated?: boolean;
+  /** Map this session's git remote (or folder) to `scope` for future sessions. */
+  mapHere?: boolean;
+  /** Move every note of `scope` into this scope. */
+  mergeInto?: string;
+}
+
 export interface HookInput {
   sessionId: string;
   cwd?: string;
@@ -231,12 +242,15 @@ export class AtlasSession {
   private transcript?: string;
   private readonly client?: string;
   private readonly clientSessionId?: string;
+  private lastDay: string;
+  private readonly origin?: { kind: "remote" | "path"; match: string };
 
   constructor(
     readonly atlas: Atlas,
     opts: SessionOptions,
   ) {
     this.started = atlas.now();
+    this.lastDay = atlas.today();
     this.clientSessionId = opts.clientSessionId;
     this.client = opts.client;
     this.key = opts.clientSessionId ?? `mcp-${randomBytes(6).toString("hex")}`;
@@ -244,7 +258,9 @@ export class AtlasSession {
     this.id = fromHook?.id ?? newSessionId();
     this.cwd = opts.cwd ?? fromHook?.cwd;
     this.transcript = opts.transcript ?? fromHook?.transcript;
-    this.scope = fromHook?.scope ?? detectScope(this.cwd, atlas.scopes()).scope;
+    const det = detectScope(this.cwd, atlas.scopes());
+    this.origin = det.remote ? { kind: "remote", match: det.remote } : det.gitRoot || this.cwd ? { kind: "path", match: det.gitRoot ?? this.cwd! } : undefined;
+    this.scope = fromHook?.scope ?? det.scope;
     if (fromHook?.path && existsSync(fromHook.path)) {
       this.path = fromHook.path;
       this.scope = String(readNote(fromHook.path)!.fm.scope ?? this.scope);
@@ -293,6 +309,8 @@ export class AtlasSession {
         client: this.client,
         client_session_id: this.clientSessionId,
         transcript: this.transcript,
+        origin: this.origin?.match,
+        origin_kind: this.origin?.kind,
       },
       segments: [],
     };
@@ -419,28 +437,81 @@ export class AtlasSession {
     return summarize(this.atlas, this.key, this.resolveScope(input.scope), input.period, input.confirmed);
   }
 
-  seal(input: SealInput & { scope?: string }) {
-    return seal(this.atlas, this.key, this.resolveScope(input.scope), input);
+  seal(input: SealInput & { scope?: string; topicUpdates?: (TopicUpdate & { name: string })[] }) {
+    const scope = this.resolveScope(input.scope);
+    const result = seal(this.atlas, this.key, scope, input);
+    const topics = (input.topicUpdates ?? []).map((u) =>
+      topic(this.atlas, [scope], { name: u.name, update: { state: u.state, entry: u.entry }, force: true, source: link(result.path) }),
+    );
+    return { ...result, topics: topics.map((x) => x.name) };
   }
 
-  scopes(input: { set?: { scope: string; isolated?: boolean } } = {}) {
-    if (input.set) {
-      const target = slug(input.set.scope);
-      const file = this.atlas.scopes();
-      if (input.set.isolated !== undefined) {
-        file.scopes[target] = { ...file.scopes[target], isolated: input.set.isolated };
+  scopes(input: { set?: ScopeChange } = {}) {
+    const set = input.set;
+    if (set) {
+      const target = slug(set.scope);
+      if (set.isolated !== undefined) {
+        const file = this.atlas.scopes();
+        file.scopes[target] = { ...file.scopes[target], isolated: set.isolated };
         writeScopes(this.atlas.paths.scopesFile, file);
-        for (const p of listMarkdown(join(this.atlas.root, "index"))) {
-          const period = readNote(p)?.fm.period;
-          if (typeof period === "string") writeIndex(this.atlas, period);
-        }
+        rebuildIndexes(this.atlas);
+      }
+      if (set.mapHere) {
+        const det = detectScope(this.cwd, this.atlas.scopes());
+        const rule: ScopeRule | undefined = det.remote
+          ? { kind: "remote", match: det.remote, scope: target }
+          : this.cwd
+            ? { kind: "path", match: det.gitRoot ?? this.cwd, scope: target }
+            : undefined;
+        if (!rule) throw new Error("This session has no working directory to map.");
+        const file = this.atlas.scopes();
+        file.rules = [...file.rules.filter((r) => !(r.kind === rule.kind && r.match === rule.match)), rule];
+        writeScopes(this.atlas.paths.scopesFile, file);
+        if (!this.scopeLocked) this.scope = target;
+      }
+      if (set.mergeInto) {
+        const into = slug(set.mergeInto);
+        mergeScope(this.atlas, target, into);
+        if (this.scope === target) this.scope = into;
       }
     }
     const file = this.atlas.scopes();
     return {
       current: this.scope,
       scopes: this.visibleScopes().map((name) => ({ name, isolated: Boolean(file.scopes[name]?.isolated) })),
+      rules: file.rules.filter((r) => this.visibleScopes().includes(r.scope)),
     };
+  }
+
+  topic(input: { name: string; scope?: string; update?: TopicUpdate; force?: boolean }) {
+    const scopes = input.scope ? [this.resolveScope(input.scope)] : topicScopes(this.scope);
+    const source = this.path && existsSync(this.path) ? link(this.path) : undefined;
+    return topic(this.atlas, scopes, { ...input, source });
+  }
+
+  /**
+   * Day-change checkpoint: on the first call after a day boundary, returns a notice asking
+   * the agent to summarize the finished part of this session and listing pending rollups.
+   */
+  checkpoint(): string | undefined {
+    const today = this.atlas.today();
+    if (today === this.lastDay) return undefined;
+    const previous = this.lastDay;
+    this.lastDay = today;
+    const lines: string[] = [];
+    const note = this.path ? readNote(this.path) : undefined;
+    if (note) {
+      const unsummarized = parseSession(note).segments.filter((x) => x.day >= previous && x.day < today && !x.summary);
+      for (const seg of unsummarized) {
+        lines.push(`The day ${seg.day} has ended. Summarize this session's part of it now: call close_session with segment: "${seg.day}", a headline and a summary. The session stays open.`);
+      }
+    }
+    const p = this.pending();
+    if (p.items.length) {
+      const over = p.totalTokens > p.gateTokens;
+      lines.push(`${p.items.length} rollup(s) pending, about ${p.totalTokens} tokens${over ? `, over the ${p.gateTokens} gate: ask the user before doing the ones marked needs_confirmation` : ""}. Call pending() for the list.`);
+    }
+    return lines.length ? `[Temporal Atlas checkpoint]\n${lines.join("\n")}` : undefined;
   }
 }
 
