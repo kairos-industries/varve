@@ -36,7 +36,7 @@ The atlas root is `$TEMPORAL_ATLAS_DIR`, defaulting to `~/TemporalAtlas`.
     locks/                     one lock file per rollup in progress
 ```
 
-Week files use the ISO week-numbering year, so 2026-12-29 belongs to `2027-W01`.
+Week files use the ISO week-numbering year, so 2025-12-29 belongs to `2026-W01`.
 
 The Markdown files are the source of truth ([ADR 0002](docs/adr/0002-markdown-files-are-the-source-of-truth.md)). The search index lives in memory and is rebuilt from the files when the server starts.
 
