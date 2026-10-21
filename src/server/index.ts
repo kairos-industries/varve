@@ -87,7 +87,9 @@ export function createServer(session: AtlasSession): McpServer {
     (a) => {
       const r = session.closeSession(a);
       const state = r.closed ? "Session closed." : `Summary for ${r.segment} saved; the session stays open.`;
-      return r.pending.items.length ? `${state}\n\n${pendingText(r.pending)}` : state;
+      if (!r.pending.items.length) return state;
+      if (session.atlas.config.rollups === "nightly") return `${state} ${r.pending.items.length} rollup(s) are pending; the nightly run will write them.`;
+      return `${state}\n\n${pendingText(r.pending)}`;
     },
   );
 

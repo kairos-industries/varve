@@ -1,9 +1,11 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Atlas } from "../atlas.js";
 import { allScopes } from "../periods.js";
 import { pending } from "../rollup/index.js";
-import { isOrphan, parseSession } from "../sessions/note.js";
+import { isOrphan, isSkipped, parseSession } from "../sessions/note.js";
+import { EVENTS } from "./install.js";
 import { listMarkdown, noteName, readNote } from "../store/note.js";
 
 export interface DoctorReport {
@@ -15,12 +17,31 @@ export interface DoctorReport {
   openSessions: string[];
   unresolvedLinks: string[];
   staleLocks: string[];
+  skipped: number;
+  /** Claude Code hook events the atlas hooks are installed for, or undefined when no atlas hook is installed. */
+  hooks?: string[];
   problems: string[];
+  warnings: string[];
 }
 
 const OPEN_TOO_LONG_MS = 2 * 24 * 3600 * 1000;
 
-export function doctor(atlas: Atlas): DoctorReport {
+/** Which atlas hooks Claude Code runs, read from its settings file. */
+export function installedHooks(settingsPath = join(homedir(), ".claude", "settings.json")): string[] | undefined {
+  if (!existsSync(settingsPath)) return undefined;
+  let hooks: Record<string, { hooks?: { command?: string }[] }[]> | undefined;
+  try {
+    hooks = JSON.parse(readFileSync(settingsPath, "utf8")).hooks;
+  } catch {
+    return undefined;
+  }
+  const found = EVENTS.filter(([event, arg]) =>
+    (hooks?.[event] ?? []).some((e) => (e.hooks ?? []).some((h) => new RegExp(`\\bhook\\s+${arg}\\b`).test(h.command ?? "") && /temporal-atlas|cli\/main\.js/.test(h.command ?? ""))),
+  ).map(([event]) => event);
+  return found.length ? found : undefined;
+}
+
+export function doctor(atlas: Atlas, opts: { settingsPath?: string } = {}): DoctorReport {
   const root = atlas.root;
   const files = listMarkdown(join(root, "scopes")).concat(listMarkdown(join(root, "index")));
   const names = new Set(files.map(noteName));
@@ -37,12 +58,14 @@ export function doctor(atlas: Atlas): DoctorReport {
   const now = atlas.now().getTime();
   const orphans: string[] = [];
   const openSessions: string[] = [];
+  let skipped = 0;
   const scopes = allScopes(atlas);
   for (const scope of scopes) {
     for (const p of listMarkdown(atlas.paths.sessionsDir(scope))) {
       const note = readNote(p)!;
       if (note.error) continue;
       const s = parseSession(note);
+      if (isSkipped(s)) skipped++;
       if (isOrphan(s)) orphans.push(noteName(p));
       const started = Date.parse(String(s.fm.started));
       if (s.fm.status === "open" && now - started > OPEN_TOO_LONG_MS) openSessions.push(noteName(p));
@@ -58,19 +81,42 @@ export function doctor(atlas: Atlas): DoctorReport {
     }
   }
 
+  const pend = scopes.map((scope) => {
+    const p = pending(atlas, [scope]);
+    return { scope, count: p.items.length, tokens: p.totalTokens, stale: p.items.filter((i) => i.stale).length };
+  });
+  const hooks = installedHooks(opts.settingsPath);
+  const warnings: string[] = [];
+  const backlog = pend.reduce((sum, p) => sum + p.tokens, 0);
+  const count = pend.reduce((sum, p) => sum + p.count, 0);
+  if (backlog > atlas.config.costGateTokens) {
+    warnings.push(
+      atlas.config.rollups === "nightly"
+        ? `${count} rollups are waiting (about ${backlog} tokens), more than the nightly run has done. Check .atlas/tidy.log, or run \`temporal-atlas tidy\`.`
+        : `${count} rollups are waiting (about ${backlog} tokens, over the ${atlas.config.costGateTokens}-token cost gate), so briefs show drafts. Ask your agent to tidy the atlas, run \`temporal-atlas tidy\`, or schedule it with \`temporal-atlas install nightly\`.`,
+    );
+  }
+  if (orphans.length) {
+    warnings.push(`${orphans.length} session(s) have a transcript but no record. Run \`temporal-atlas backfill\` to record them from their transcripts (no model, no cost).`);
+  }
+  if (hooks && !hooks.includes("Stop")) {
+    warnings.push("The Claude Code hooks are from an older version and do not record activity after each turn. Run `temporal-atlas install claude-code` again.");
+  }
+  if (openSessions.length) warnings.push(`${openSessions.length} session(s) have been open for more than 2 days.`);
+
   return {
     atlasDir: root,
     scopes,
     notes: files.length,
-    pending: scopes.map((scope) => {
-      const p = pending(atlas, [scope]);
-      return { scope, count: p.items.length, tokens: p.totalTokens, stale: p.items.filter((i) => i.stale).length };
-    }),
+    pending: pend,
     orphans,
     openSessions,
     unresolvedLinks: [...links].filter((l) => !names.has(l)).sort(),
     staleLocks,
+    skipped,
+    hooks,
     problems,
+    warnings,
   };
 }
 
@@ -79,10 +125,14 @@ export function formatDoctor(r: DoctorReport): string {
   const pend = r.pending.filter((p) => p.count);
   lines.push(pend.length ? "Pending rollups:" : "Pending rollups: none");
   for (const p of pend) lines.push(`  ${p.scope}: ${p.count} (about ${p.tokens} tokens${p.stale ? `, ${p.stale} stale` : ""})`);
-  if (r.orphans.length) lines.push(`Sessions waiting to be summarized from transcripts: ${r.orphans.length}`);
+  if (r.orphans.length) lines.push(`Sessions with a transcript but no record: ${r.orphans.length}`);
+  if (r.skipped) lines.push(`Sessions skipped by capture (headless runs, empty transcripts): ${r.skipped}`);
+  lines.push(`Claude Code hooks: ${r.hooks ? r.hooks.join(", ") : "not installed"}`);
   if (r.openSessions.length) lines.push(`Sessions open for more than 2 days: ${r.openSessions.join(", ")}`);
   if (r.unresolvedLinks.length) lines.push(`Links to notes that do not exist (often topics not yet written): ${r.unresolvedLinks.slice(0, 15).join(", ")}${r.unresolvedLinks.length > 15 ? ", ..." : ""}`);
   if (r.staleLocks.length) lines.push(`Expired rollup locks (safe to ignore): ${r.staleLocks.length}`);
-  lines.push("", r.problems.length ? `Problems:\n${r.problems.map((p) => `  ${p}`).join("\n")}` : "No problems found.");
+  if (r.warnings.length) lines.push("", `Warnings:\n${r.warnings.map((w) => `  - ${w}`).join("\n")}`);
+  if (r.problems.length) lines.push("", `Problems:\n${r.problems.map((p) => `  ${p}`).join("\n")}`);
+  if (!r.problems.length && !r.warnings.length) lines.push("", "No problems found.");
   return lines.join("\n");
 }

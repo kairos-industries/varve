@@ -13,6 +13,7 @@ describe("install claude-code", () => {
     expect(merged.model).toBe("opus");
     expect(merged.hooks.SessionStart!.map((h) => h.hooks[0]!.command)).toEqual(["echo hi", `${CMD} session-start`]);
     expect(merged.hooks.SessionEnd!.map((h) => h.hooks[0]!.command)).toEqual([`${CMD} session-end`]);
+    expect(merged.hooks.Stop!.map((h) => h.hooks[0]!.command)).toEqual([`${CMD} stop`]);
   });
 
   it("is idempotent and replaces an older atlas hook command", () => {

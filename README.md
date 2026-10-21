@@ -1,88 +1,293 @@
 # Temporal Atlas
 
-A memory for AI agents, layered by time. Temporal Atlas is an MCP server that records what you and your agents do, session by session, and summarizes it into day, week, month and year notes. Each layer is shorter than the one below it. When an agent starts, it gets a brief of recent work. It can open any period or search everything that came before.
+**Your coding agent forgets everything when the session ends. Temporal Atlas gives it a memory of past work, organized by time.**
 
-The atlas is a folder of Markdown files with YAML frontmatter and `[[wikilinks]]`, so you can open it in Obsidian, edit it by hand, and keep it in git.
+Temporal Atlas is an MCP server. It records what you and your agents do in each session, then summarizes that record into day, week, month and year notes. Each layer is shorter than the one below it. When a new session starts, the agent already knows what happened yesterday, what was decided last week and which threads are still open. It can zoom into any period or search everything that came before.
+
+The atlas is a folder of plain Markdown. Open it in Obsidian, edit it by hand, keep it in git. There is no database, no API key and no cloud service.
 
 ```
-year      2026                     ~800 tokens
-month     2026-10                  ~400 tokens
-week      2026-W41                 ~500 tokens
-day       2026-10-08               ~600 tokens
-session   2026-10-08T1432-k3f9q2   full detail
+year      2026                    ~800 tokens    what the year was about
+month     2026-10                 ~400 tokens    what shipped, what changed direction
+week      2026-W42                ~500 tokens    the week's arc
+day       2026-10-19              ~600 tokens    what got done, decided, left open
+session   2026-10-19T0907-k3f9q2  full detail    requests, files, commits, decisions, findings
 ```
 
-The server never calls a model. The agent you already run writes the summaries, and a cost gate asks you before a large backlog is summarized.
+- Works with Claude Code, Codex, Cursor, Windsurf, VS Code and any other MCP client.
+- In Claude Code, every session is recorded after each turn, without a model call and without the agent having to remember to do it.
+- Summaries are written by your agent, or overnight by `temporal-atlas tidy` with a hard token and dollar budget. The MCP server itself never calls a model.
+- Every project gets its own memory. Client work can be isolated so no other project can see it.
+- If you edit a note, your version wins, and the summaries built on it are redone.
 
-## Install
+## What your agent sees
+
+At the start of every session the agent receives a brief of its project. This is a shortened example:
+
+```markdown
+# Atlas brief: billing-api
+Today is Tue 2026-10-20, week 2026-W43. Days end at 04:00 local time.
+
+## Last session (2026-10-19)
+Moved invoice PDF rendering to a queue; retries now idempotent
+
+#### Decisions
+- Kept the existing S3 bucket; a new one would need a security review (2 weeks).
+- Retry key is invoice_id + version, so a re-render after an edit is not deduplicated.
+
+#### Open threads
+- Load test with 10k invoices before Thursday's release.
+- Ask Dana whether credit notes need the same queue.
+
+## This week (draft)
+- Mon 10-19: invoice rendering queue, idempotent retries
+- Tue 10-20: (today)
+
+## Last week: 2026-W42
+Shipped proration for mid-cycle plan changes. Found and fixed a rounding bug in
+EUR invoices (banker's rounding vs half-up). Decided to drop the legacy CSV export.
+
+## Elsewhere this week
+- **payments-gateway**: Stripe webhook signature check moved to middleware
+```
+
+When the agent needs more, it asks: "what did we decide about the CSV export?" runs `search`, and "what happened in September?" runs `zoom`.
+
+## Measured on real work
+
+Numbers from the author's own atlas: 12 days of daily use (8 to 20 October 2026) across 11 scopes and 57 recorded conversations.
+
+| | |
+|---|---|
+| Conversation text in those 57 conversations (tool output excluded) | about 1.25 million tokens |
+| The same conversations as activity, recorded without a model | about 26,000 tokens, **49x smaller** |
+| Activity per conversation per day | about 380 tokens |
+| Raw transcripts on disk, for comparison | 300 MB |
+| Sessions the agent summarized itself, against their conversation text | 36x smaller |
+| Brief for the busiest project | about 1,600 tokens, built in under 100 ms |
+| Model calls made by the MCP server | 0 |
+| Test suite | 115 tests in about 3 seconds, none call a model |
+
+Token counts are estimated at 4 characters per token, the same rule the server uses for its cost gate. Version 0.2 came out of these 12 days: see [what changed and why](DESIGN.md#18-what-v02-changed-and-why).
+
+## Quick start
 
 Requires Node 20 or later.
+
+**1. Create an atlas.**
 
 ```sh
 npx -y temporal-atlas init ~/TemporalAtlas
 ```
 
-Then add the server to your agent.
+**2. Connect your agent.**
 
-**Claude Code**
+Claude Code:
 
 ```sh
 claude mcp add temporal-atlas --scope user -e TEMPORAL_ATLAS_DIR=$HOME/TemporalAtlas -- npx -y temporal-atlas
-npx -y temporal-atlas install claude-code   # optional: capture sessions automatically
 ```
 
-**Codex**
+Codex:
 
 ```sh
 codex mcp add temporal-atlas --env TEMPORAL_ATLAS_DIR=$HOME/TemporalAtlas -- npx -y temporal-atlas
 ```
 
-**Cursor, Windsurf, VS Code and others**: add an MCP server with command `npx`, arguments `["-y", "temporal-atlas"]` and environment `TEMPORAL_ATLAS_DIR`.
+Cursor, Windsurf, VS Code and other clients take an MCP server entry like this one:
+
+```json
+{
+  "mcpServers": {
+    "temporal-atlas": {
+      "command": "npx",
+      "args": ["-y", "temporal-atlas"],
+      "env": { "TEMPORAL_ATLAS_DIR": "/Users/you/TemporalAtlas" }
+    }
+  }
+}
+```
+
+**3. In Claude Code, record every session automatically.**
+
+```sh
+npx -y temporal-atlas install claude-code
+```
+
+This adds three hooks to `~/.claude/settings.json`: `SessionStart`, `Stop` (after every turn) and `SessionEnd`. It prints the exact change and asks before writing. From then on every conversation has a session note, even if the agent never logs anything.
+
+**4. Optional: write the summaries overnight.**
+
+```sh
+npx -y temporal-atlas install nightly
+```
+
+On macOS this adds a launchd job that runs `temporal-atlas tidy --yes` at 04:30. If the Mac is asleep, it runs when the Mac wakes. On Linux it prints a crontab line. Each run uses your existing Claude Code sign-in and stops at 200,000 tokens or $2.00, whichever comes first. Both limits are in `atlas.config.json`. Without this step, your agent writes the summaries when you ask it to tidy the atlas.
+
+**5. Start working.** Open a session in any project. The agent gets the brief, and the atlas fills in as you work.
 
 To keep the atlas inside an existing Obsidian vault, point `TEMPORAL_ATLAS_DIR` at a folder in the vault, such as `MyVault/Atlas`. The server writes only inside that folder.
 
+### Install from source
+
+```sh
+git clone <this repository> temporal-atlas && cd temporal-atlas
+npm install && npm run build
+claude mcp add temporal-atlas --scope user -e TEMPORAL_ATLAS_DIR=$HOME/TemporalAtlas -- node "$PWD/dist/cli/main.js"
+node dist/cli/main.js install claude-code
+```
+
+Run `npm run build` again after you change the code. The server and the hooks run whatever is in `dist/`.
+
+### Upgrading from 0.1
+
+```sh
+temporal-atlas install claude-code   # adds the Stop hook
+temporal-atlas backfill --dry-run    # shows what it would record, then run it without --dry-run
+temporal-atlas tidy --dry-run        # shows the backlog and its size
+```
+
+`backfill` builds activity for older sessions from their transcripts, folds the notes of a reopened conversation into one, and skips headless runs. It uses no model.
+
 ## How it works
 
-**Scopes.** Every session belongs to a scope, usually a project or client, detected from the git remote or folder. Sessions outside any project go to `general`. Each scope gets its own day, week, month and year notes. Index notes list every scope's headline for a period. A scope marked isolated is invisible from every other scope, which keeps client work apart.
+```mermaid
+flowchart LR
+    T[transcript] -- Stop hook, every turn --> A[session note:<br/>activity]
+    G[agent] -- log, close_session --> A
+    A --> D[day]
+    D --> W[week]
+    D --> M[month]
+    M --> Y[year]
+    N[agent, or nightly tidy] -. summarize + seal .-> D & W & M & Y
+```
 
-**Sessions.** The agent calls `log` for decisions, changes and findings as it works, and `close_session` with a headline and summary at the end. A session that runs past the day boundary (04:00 by default) is split into one segment per day.
+**Activity.** After every turn, the `Stop` hook reads what the transcript gained and writes an `### Activity` section into the session note: the session title, what you asked, the files changed, commits, pushes and PRs, and where the agent left off. No model is involved and it takes milliseconds, because only the new part of the transcript is read. Tool output is never copied. A conversation you reopen or resume keeps writing to the same note.
 
-**Drafts and sealing.** While a period is open, its note is a draft assembled from the notes beneath it, at no token cost. Once the period ends, it becomes a pending rollup. The agent reads the sources with `summarize` and writes the summary with `seal`. Days roll up into weeks and months, and months into years.
+```markdown
+### Activity
+Invoice PDF rendering queue
 
-**Checkpoints.** The server looks for pending rollups when a session starts, at the first call after the day boundary, at session close, and whenever you ask it to tidy the atlas. Rollups under the cost gate (30,000 tokens by default) run without asking; larger batches wait for your confirmation.
+- 09:07 asked: Move invoice PDF rendering off the request path, it times out on big invoices
+- 10:31 asked: make the retries idempotent
+- 11:02 asked: commit and push
+- files changed (3): `src/render/queue.ts`, `src/render/worker.ts`, `test/render.test.ts`
+- 11:02 commit: Render invoice PDFs from a queue with idempotent retries
+- 11:03 pushed (origin main)
+- 11:04 last reply: Pushed. Rendering runs on the queue now; a retry with the same invoice_id and version is a no-op...
+- 3 requests, 41 tool calls
+```
 
-**Corrections.** Your edits always win. If you change a note in Obsidian, the server keeps your version and marks the summaries built on it stale, so they get redone. Agents correct sealed notes with `amend`, which adds a dated entry instead of rewriting history.
+**Events and summaries.** As it works, the agent can also call `log` for each decision (with the reason), notable change, finding or todo. Before it finishes, it calls `close_session` with a headline and a summary. These carry the why, which activity cannot. A session that runs past the day boundary (04:00 by default) is split into one segment per day, so late-night work counts toward the day it belongs to.
 
-**Topics.** Durable knowledge ("Auth design", "Pricing model") lives in topic notes with the current state on top and a dated timeline below. The server offers an existing topic with a similar name before creating a duplicate.
+**Drafts.** While a period is open, its note is a draft that the server assembles from the notes beneath it. Drafts cost no tokens and show in Obsidian as they grow.
+
+**Rollups and sealing.** Once a period ends, it becomes a pending rollup. Someone reads its sources, writes a summary to a length target, and seals it: your agent through the `summarize` and `seal` tools, or `temporal-atlas tidy`. The server rejects a summary longer than 150% of its target. Days roll up into both weeks and months, because ISO weeks cross month boundaries. Months roll up into years.
+
+**Cost control.** The server estimates the input tokens of every pending rollup. An agent runs rollups under the cost gate (30,000 tokens by default) without asking, and must tell you the estimate and wait for your yes above it. `tidy` runs inside its own token and dollar budget instead, passes the remaining dollar budget to every `claude` call, and logs each rollup with its cost to `.atlas/tidy.log`. Two writers cannot summarize the same period at once. A lock file blocks the second one for up to 30 minutes.
+
+**Topics.** Durable knowledge, such as "Auth design" or "Pricing model", lives in topic notes. Each one has the current state on top and a dated timeline below. Before creating a topic, the server checks for existing ones with similar names, so you don't end up with "Auth", "Authentication" and "Auth design".
+
+### What is not recorded
+
+- Headless sessions: `claude -p` runs and other sessions where every prompt came from a program. These are usually tools calling a model, and recording them filled v0.1 with noise. Set `capture.headless` to record them.
+- Sessions in folders listed in `capture.ignorePaths`.
+- The `claude -p` calls that `tidy` makes.
+
+### Projects and client isolation
+
+Every session belongs to a scope, usually one project or one client. The server picks the scope in this order:
+
+1. A rule you saved with `scopes` (`mapHere`) for this folder or git remote.
+2. `general`, for folders inside `capture.generalPaths`, such as the scratch folders Claude Desktop creates for each chat.
+3. The repository name from the `origin` git remote.
+4. The git root folder name.
+5. The working directory name.
+6. `general`, for sessions outside any project (including your home directory).
+
+A scope marked isolated is visible only from sessions inside it. It never appears in another project's brief, in search results or in index notes, even if an agent asks for it by name. Use this when you work for more than one client on the same machine.
+
+| From a session in | Can read |
+|---|---|
+| an isolated scope X | X and `general` |
+| any other scope | itself, `general`, every non-isolated scope, index notes |
+
+`scopes` can also merge one scope into another. Merging into an unused name is a rename.
+
+### Your edits win
+
+The server stores a hash of every note body it writes. If the body on disk no longer matches, a person edited it. The server keeps that version, never overwrites it, and marks every summary built on it stale. Stale summaries go back into the rollup queue.
+
+Agents correct sealed notes with `amend`. An amendment adds a dated entry with its reason and leaves the original text in place.
+
+### Privacy and security
+
+- The atlas stays on your disk. The MCP server and the hooks make no network calls. `tidy` sends rollup sources to the model through your own `claude` CLI, only when you run or schedule it.
+- Before writing any note, the server replaces likely secrets with `[redacted:<kind>]`. The built-in patterns cover Anthropic, OpenAI, GitHub, Slack and AWS keys, bearer tokens, private key blocks, passwords in connection strings and `secret=`-style assignments. You can add your own.
+- Activity keeps short excerpts of requests and replies (300 and 600 characters at most), never tool output. Full conversation text goes to a model only if you summarize an orphan session from its transcript (`tidy --orphans`, or an agent asked to).
+
+## Things to ask your agent
+
+| You say | The agent calls |
+|---|---|
+| "What were we doing on this?" | `brief` |
+| "What did we decide about the CSV export?" | `search` |
+| "Show me what happened in September." | `zoom` with `2026-09` |
+| "Tidy the atlas." | `pending`, then `summarize` and `seal` for each rollup |
+| "Keep this project hidden from the others." | `scopes` with `isolated` |
+| "Sessions in this folder belong to billing-api." | `scopes` with `mapHere` |
+| "That summary is wrong, we never dropped the export." | `amend` |
+| "What do we know about auth?" | `topic` |
 
 ## Tools
 
-| Tool | Does |
-|---|---|
-| `brief` | The layered view of recent work in a scope |
-| `log` | Records a decision, change, finding, todo or note |
-| `close_session` | Writes the session summary; returns pending rollups |
-| `pending` | Lists rollups waiting, with token estimates and the cost gate |
-| `summarize` | Returns the sources and instructions for one rollup |
-| `seal` | Saves a rollup and seals the period |
-| `zoom` | Opens a period or session and lists what is beneath it |
-| `search` | Keyword search with scope, layer and date filters |
-| `topic` | Reads, creates or updates a topic note |
-| `scopes` | Lists scopes; isolates, maps or merges them |
-| `amend` | Adds a correction to a sealed note |
+| Tool | Arguments | Does |
+|---|---|---|
+| `brief` | `scope?`, `lookback?` | The layered view of recent work in a scope |
+| `log` | `type`, `text`, `topics?`, `scope?` | Records a decision, change, finding, todo or note |
+| `close_session` | `headline`, `summary`, `segment?` | Writes the session summary and returns pending rollups |
+| `pending` | `all?` | Lists pending rollups with token estimates, each marked `auto` or `needs_confirmation` |
+| `summarize` | `period`, `scope?`, `confirmed?` | Returns the sources, length target and instructions for one rollup |
+| `seal` | `period`, `content`, `headline`, `scope?`, `topic_updates?` | Saves a rollup and seals the period |
+| `zoom` | `period`, `scope?` | Opens a period or session and lists the notes beneath it |
+| `search` | `query`, `scope?`, `layer?`, `from?`, `to?` | Keyword search (BM25), filtered by scope, layer and date |
+| `topic` | `name`, `scope?`, `update?`, `force?` | Reads, creates or updates a topic note |
+| `scopes` | `set?` | Lists scopes, or isolates, maps or merges one |
+| `amend` | `note`, `change`, `reason` | Adds a dated correction to a sealed note |
+
+The server uses only tools, no MCP resources or prompts, so it behaves the same in every client. Clients that don't read server instructions, such as VS Code Copilot, can call `brief` to get the same context.
 
 ## Command line
 
 ```
-temporal-atlas                      run the MCP server over stdio
-temporal-atlas init [dir]           create an atlas
-temporal-atlas install claude-code  add the capture hooks (shows the change and asks first)
-temporal-atlas doctor               report pending rollups, orphan sessions and broken notes
+temporal-atlas                      Run the MCP server over stdio
+temporal-atlas init [dir]           Create an atlas (default: $TEMPORAL_ATLAS_DIR or ~/TemporalAtlas)
+temporal-atlas install claude-code  Add the capture hooks to ~/.claude/settings.json (asks first; --yes to skip)
+temporal-atlas install nightly      Schedule `tidy --yes` every night (asks first; --at HH:MM, --remove)
+temporal-atlas tidy                 Write pending rollups with `claude -p`, within a token and dollar budget
+                                      --dry-run, --yes, --scope <name>, --model <name>,
+                                      --max-tokens <n>, --max-usd <amount>, --orphans
+temporal-atlas backfill             Record older sessions from their transcripts, without a model
+                                      --dry-run, --prune (delete headless runs instead of marking them)
+temporal-atlas doctor               Check the atlas: backlog, unrecorded sessions, hooks, broken notes
+temporal-atlas hook <event>         Called by the hooks; not for direct use
+```
+
+A `tidy --dry-run` prints the plan before anything is spent:
+
+```
+[2026-10-20T17:35:17+02:00] 46 rollup(s) pending, about 63682 input tokens.
+Budget for this run: 200000 tokens or $2.00, model sonnet.
+  billing-api 2026-10-14 (day, about 1576 tokens)
+  payments-gateway 2026-10-14 (day, about 940 tokens)
+  ...
 ```
 
 ## Configuration
 
-`atlas.config.json` in the atlas folder:
+`TEMPORAL_ATLAS_DIR` sets the atlas folder. The default is `~/TemporalAtlas`.
+
+`atlas.config.json` in the atlas folder holds everything else. Every key is optional.
 
 ```json
 {
@@ -91,37 +296,76 @@ temporal-atlas doctor               report pending rollups, orphan sessions and 
   "costGateTokens": 30000,
   "lengthTargets": { "segment": 1500, "day": 600, "week": 500, "month": 400, "year": 800 },
   "briefTokens": { "instructions": 1500, "tool": 5000 },
-  "scrubPatterns": []
+  "scrubPatterns": [{ "name": "internal-token", "pattern": "itk_[A-Za-z0-9]{32}" }],
+  "rollups": "agent",
+  "capture": {
+    "headless": false,
+    "ignorePaths": ["~/scratch"],
+    "generalPaths": ["~/Library/Application Support/Claude", "~/.config/Claude", "~/AppData/Roaming/Claude"]
+  },
+  "tidy": { "command": "claude", "model": "sonnet", "maxTokens": 200000, "maxUsd": 2, "at": "04:30" }
 }
 ```
 
-The server replaces likely secrets (API keys, tokens, private keys, passwords in connection strings) with `[redacted:<kind>]` before writing. Add your own patterns as `{ "name": "...", "pattern": "regex" }`.
+| Key | Meaning |
+|---|---|
+| `timezone` | An IANA zone such as `Europe/Madrid`, or `local` for the system zone |
+| `dayBoundary` | When one day ends and the next begins. Work at 01:30 counts toward the previous day. |
+| `costGateTokens` | Agent rollups above this running total need your confirmation |
+| `lengthTargets` | Target size in tokens for each layer's notes |
+| `briefTokens` | Cap for the brief in the server instructions and for the `brief` tool |
+| `scrubPatterns` | Extra secret patterns, as regular expressions |
+| `rollups` | `agent`: the agent is asked to do rollups. `nightly`: agents are told the nightly run does them. Set by `install nightly`. |
+| `capture.headless` | Also record `claude -p` and other program-driven sessions |
+| `capture.ignorePaths` | Folders the hooks never record |
+| `capture.generalPaths` | Folders whose sessions go to the `general` scope |
+| `tidy.command` | The Claude Code CLI to run |
+| `tidy.model` | Model for tidy runs. `haiku` costs less, `sonnet` writes better summaries. |
+| `tidy.maxTokens`, `tidy.maxUsd` | A tidy run stops before passing either |
+| `tidy.at` | Local time for `install nightly` |
+| `transcriptMaxChars` | Transcript text handed to an orphan rollup is cut to this length (default 160,000) |
 
-## Layout
+## What's on disk
 
 ```
 TemporalAtlas/
   atlas.config.json
-  scopes/<scope>/sessions/2026/10/2026-10-08T1432-k3f9q2.md
-  scopes/<scope>/days/2026/2026-10-08 <scope>.md
-  scopes/<scope>/weeks/2026/2026-W41 <scope>.md
-  scopes/<scope>/months/2026/2026-10 <scope>.md
-  scopes/<scope>/years/2026 <scope>.md
-  scopes/<scope>/topics/<Topic>.md
-  index/days|weeks|months|years/...
-  .atlas/   scope rules, session registry, rollup locks
+  scopes/
+    billing-api/
+      sessions/2026/10/2026-10-19T0907-k3f9q2.md
+      days/2026/2026-10-19 billing-api.md
+      weeks/2026/2026-W43 billing-api.md
+      months/2026/2026-10 billing-api.md
+      years/2026 billing-api.md
+      topics/Invoice rendering.md
+  index/days|weeks|months|years/     every non-isolated project's headline per period
+  .atlas/                            scope rules, session registry, capture progress, locks, tidy.log
 ```
+
+Every note has YAML frontmatter (`layer`, `period`, `scope`, `status`, `headline`, `sources`) and links its sources with `[[wikilinks]]`, so Obsidian's graph and backlinks work without setup. Week files use the ISO week-numbering year, so 29 December 2025 belongs to `2026-W01`.
+
+## Limits
+
+- Automatic activity capture exists for Claude Code only. In other clients, the atlas records what the agent logs and summarizes through the tools.
+- Activity says what was asked and changed, not why. The why comes from the agent's `log` events and summaries.
+- Rollups need a writer: your agent, or `tidy`. Until a period is sealed, the brief shows its draft.
+- Each `tidy` rollup is one `claude -p` call, about 20 seconds each, so a large backlog takes a while. The nightly budget spreads it over several nights.
+- Search is keyword search (BM25). There is no semantic search yet.
+- The search index lives in memory and is rebuilt from the files when the server starts.
 
 ## Development
 
 ```sh
 npm install
-npm test          # unit and integration tests; none call a model
+npm test           # unit and integration tests; none call a model
+npm run typecheck
 npm run build
 ```
 
-The design is in [DESIGN.md](DESIGN.md) and the vocabulary in [CONTEXT.md](CONTEXT.md).
+Tests use a fake clock, so they cover day boundaries, ISO weeks at year ends and sessions that span several days without waiting. Integration tests start the real server and drive it through the MCP SDK client. `tidy` is tested with a fake model and a fake `claude` executable.
+
+Read [DESIGN.md](DESIGN.md) for the full design, [CONTEXT.md](CONTEXT.md) for the vocabulary, [docs/adr/](docs/adr/) for the decisions behind it, and [CONTRIBUTING.md](CONTRIBUTING.md) before sending a change. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-MIT
+MIT. Built by Bruno Manzano.

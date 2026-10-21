@@ -1,7 +1,7 @@
 import type { Atlas } from "./atlas.js";
 import { tokens } from "./config.js";
 import { isIsolated } from "./scopes/index.js";
-import { hasContent, renderEvent, type Segment, segmentHeadline, type SessionNote, sessionDays } from "./sessions/note.js";
+import { hasContent, isOrphan, renderEvent, type Segment, segmentHeadline, type SessionNote } from "./sessions/note.js";
 import { isHumanEdited, link, listMarkdown, type Note, readNote, writeFrontmatter, writeNote } from "./store/note.js";
 import { daysOf, type Layer, parentsOf, parsePeriod, periodOf, rangeOf } from "./time/index.js";
 
@@ -20,6 +20,7 @@ export function weekday(day: string): string {
 /** Read-side view over one scope's sessions and period notes. */
 export class ScopeView {
   private sessionsCache?: SessionNote[];
+  private workedCache?: string[];
 
   constructor(
     readonly atlas: Atlas,
@@ -31,13 +32,27 @@ export class ScopeView {
     return this.sessionsCache;
   }
 
-  /** Every day that has session work in this scope, ascending. */
+  /**
+   * Every day with recorded work in this scope, ascending: days with session content, sealed
+   * day notes, and drafts a human wrote in. Days that only have orphan sessions are left out
+   * until the orphan is summarized, so they never hold up a week or month.
+   */
   workedDays(): string[] {
+    this.workedCache ??= this.computeWorkedDays();
+    return this.workedCache;
+  }
+
+  private computeWorkedDays(): string[] {
     const days = new Set<string>();
-    for (const s of this.sessions()) for (const d of sessionDays(s)) days.add(d);
+    for (const s of this.sessions()) {
+      if (isOrphan(s)) continue;
+      for (const seg of s.segments) if (hasContent(seg)) days.add(seg.day);
+    }
     for (const p of listMarkdown(`${this.atlas.paths.scopeDir(this.scope)}/days`)) {
       const n = readNote(p);
-      if (typeof n?.fm.period === "string") days.add(n.fm.period);
+      if (typeof n?.fm.period !== "string") continue;
+      const kept = n.fm.status === "sealed" || n.fm.status === "stale" || n.fm.human_edited || isHumanEdited(n);
+      if (kept) days.add(n.fm.period);
     }
     return [...days].sort();
   }
@@ -97,7 +112,7 @@ export class ScopeView {
       layer === "day"
         ? this.segmentsOn(period).map((x) => segmentHeadline(x.segment))
         : this.childPeriods(period).map((c) => this.headline(c));
-    const joined = parts.join("; ");
+    const joined = parts.filter(Boolean).join("; ");
     return joined.length > 200 ? `${joined.slice(0, 197)}...` : joined;
   }
 
@@ -158,6 +173,7 @@ export function renderSegmentSource({ session, segment }: DaySegment): string {
   if (segment.headline) out.push(`Headline: ${segment.headline}`);
   if (segment.summary) out.push("", segment.summary);
   if (segment.events.length) out.push("", "Events:", ...segment.events.map(renderEvent));
+  if (segment.activity) out.push("", "Activity (recorded from the transcript):", segment.activity);
   return out.join("\n");
 }
 

@@ -179,7 +179,8 @@ export function buildBrief(atlas: Atlas, opts: BriefOptions): string {
   const elsewhere: string[] = [];
   for (const other of others) {
     const ov = new ScopeView(atlas, other);
-    if (ov.workedDaysIn(thisWeek).length) elsewhere.push(`- **${other}**: ${ov.headline(thisWeek)}`);
+    const headline = ov.workedDaysIn(thisWeek).length ? ov.headline(thisWeek) : "";
+    if (headline) elsewhere.push(`- **${other}**: ${headline}`);
   }
   if (elsewhere.length) {
     sections.push({ key: "elsewhere", title: "## Elsewhere this week", body: elsewhere.slice(0, compact ? 5 : 20).join("\n"), priority: 7 });
@@ -190,13 +191,17 @@ export function buildBrief(atlas: Atlas, opts: BriefOptions): string {
   if (p.items.length) {
     const n = p.items.length;
     const gate = p.totalTokens > p.gateTokens ? `over the ${p.gateTokens} gate, so ask the user first` : `under the ${p.gateTokens} gate`;
+    const list = `${p.items
+      .slice(0, 6)
+      .map((i) => i.period)
+      .join(", ")}${n > 6 ? ", ..." : ""}`;
     sections.push({
       key: "pending",
       title: "## Pending rollups",
-      body: `${n} rollup${n === 1 ? "" : "s"} pending (about ${p.totalTokens} tokens, ${gate}): ${p.items
-        .slice(0, 6)
-        .map((i) => i.period)
-        .join(", ")}${n > 6 ? ", ..." : ""}. Call pending() and work through them.`,
+      body:
+        atlas.config.rollups === "nightly"
+          ? `${n} rollup${n === 1 ? "" : "s"} pending (${list}). The nightly run writes them; do them now only if the user asks.`
+          : `${n} rollup${n === 1 ? "" : "s"} pending (about ${p.totalTokens} tokens, ${gate}): ${list}. Call pending() and work through them.`,
       priority: 1,
     });
   }

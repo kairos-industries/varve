@@ -1,6 +1,6 @@
 {
   "name": "temporal-atlas",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Time-layered memory for AI agents, served over MCP",
   "license": "MIT",
   "type": "module",

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
+import { isInside } from "../config.js";
 
 export const GENERAL = "general";
 
@@ -65,8 +66,11 @@ export interface Detection {
   gitRoot?: string;
 }
 
-/** Pick the scope for a working directory, following the order in DESIGN.md section 3. */
-export function detectScope(cwd: string | undefined, file: ScopesFile): Detection {
+/**
+ * Pick the scope for a working directory, following the order in DESIGN.md section 3.
+ * Folders inside `generalPaths` (app scratch folders and the like) go to the general scope.
+ */
+export function detectScope(cwd: string | undefined, file: ScopesFile, generalPaths: string[] = []): Detection {
   if (!cwd || !existsSync(cwd)) return { scope: GENERAL };
   const dir = resolve(cwd);
   const remoteRaw = git(dir, ["remote", "get-url", "origin"]);
@@ -81,6 +85,7 @@ export function detectScope(cwd: string | undefined, file: ScopesFile): Detectio
     .filter((r) => r.kind === "path" && (dir === r.match || dir.startsWith(`${r.match}/`)))
     .sort((a, b) => b.match.length - a.match.length)[0];
   if (pathRule) return { scope: pathRule.scope, remote, gitRoot };
+  if (isInside(dir, generalPaths)) return { scope: GENERAL };
 
   if (remote) return { scope: slug(remote.split("/").pop() ?? GENERAL), remote, gitRoot };
   if (gitRoot) return { scope: slug(basename(gitRoot)), gitRoot };

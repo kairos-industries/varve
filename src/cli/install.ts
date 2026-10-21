@@ -6,8 +6,10 @@ import { createInterface } from "node:readline/promises";
 type HookEntry = { matcher?: string; hooks: { type: string; command: string; timeout?: number }[] };
 type Settings = { hooks?: Record<string, HookEntry[]> } & Record<string, unknown>;
 
-const EVENTS: [string, string][] = [
+/** Claude Code hook events and the `temporal-atlas hook` argument each one runs. */
+export const EVENTS: [string, string][] = [
   ["SessionStart", "session-start"],
+  ["Stop", "stop"],
   ["SessionEnd", "session-end"],
 ];
 
@@ -34,7 +36,7 @@ export async function installClaudeCode(opts: { atlasDir: string; script: string
   const path = opts.settingsPath ?? join(homedir(), ".claude", "settings.json");
   const before: Settings = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
   const after = mergeHooks(before, hookCommand(opts.atlasDir, opts.script));
-  const show = (s: Settings) => JSON.stringify({ SessionStart: s.hooks?.SessionStart, SessionEnd: s.hooks?.SessionEnd }, null, 2);
+  const show = (s: Settings) => JSON.stringify(Object.fromEntries(EVENTS.map(([e]) => [e, s.hooks?.[e]])), null, 2);
 
   console.log(`Claude Code settings: ${path}\n`);
   console.log("Hooks after the change:\n");

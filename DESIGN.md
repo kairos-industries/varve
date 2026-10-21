@@ -1,6 +1,6 @@
 # Temporal Atlas design (v1)
 
-Status: accepted; v0.1 implements it. Terms in this document are defined in [CONTEXT.md](CONTEXT.md).
+Status: accepted; v0.2 implements it. v0.2 adds activity capture, the tidy command and backfill (section 18). Terms in this document are defined in [CONTEXT.md](CONTEXT.md).
 
 ## What it is
 
@@ -8,7 +8,7 @@ Temporal Atlas is an MCP server that gives any agent (Claude Code, Codex, Cursor
 
 The atlas is a folder of plain Markdown with YAML frontmatter and `[[wikilinks]]`. It opens directly in Obsidian, works in git, and needs no database.
 
-The server never calls a model. The connected agent writes every summary ([ADR 0001](docs/adr/0001-the-agent-writes-every-summary.md)).
+The server never calls a model. The connected agent writes summaries ([ADR 0001](docs/adr/0001-the-agent-writes-every-summary.md)), or the `tidy` command does when the user runs or schedules it ([ADR 0004](docs/adr/0004-tidy-may-call-a-model-when-the-user-schedules-it.md)).
 
 ## 1. Folder layout
 
@@ -34,6 +34,9 @@ The atlas root is `$TEMPORAL_ATLAS_DIR`, defaulting to `~/TemporalAtlas`.
     scopes.json                path and git-remote rules that map to scopes
     sessions.json              open sessions and their client session ids
     locks/                     one lock file per rollup in progress
+    capture/                   how far each conversation's transcript has been read, and its note
+    mutex/                     short-lived note locks shared by the hooks and the server
+    tidy.log                   one JSON line per rollup a tidy run wrote, with tokens and cost
 ```
 
 Week files use the ISO week-numbering year, so 2025-12-29 belongs to `2026-W01`.
@@ -128,16 +131,32 @@ Index notes are assembled without a model. Each one lists, for its period, the `
 ### Lifecycle
 
 1. **Start.** On connect, the server registers the session in `.atlas/sessions.json` but writes no file. If the Claude Code adapter is installed, the `SessionStart` hook has already recorded the client session id, working directory and transcript path, and the server links to that record.
-2. **First write.** The first `log` or `close_session` call creates the session note.
+2. **First write.** The first `log` or `close_session` call, or the first turn the `Stop` hook captures, creates the session note.
 3. **During the session.** `log(type, text, topics?)` appends a timestamped event to the current segment.
 4. **Day change.** On the first tool call after a day boundary, the server opens a new segment and attaches a checkpoint notice to the tool result. The notice asks the agent to summarize the finished segment with `close_session(headline, summary, segment)` and lists any pending rollups.
 5. **Close.** `close_session(headline, summary)` writes the summary for the current segment and marks the session closed. Headings in the summary are demoted below the note's own sections. A client disconnect, or the `SessionEnd` hook, also closes it.
 
 A session note has one `## <date>` section per segment, each with a summary (goal, what was done, decisions and why, files and artifacts touched, open threads, topic links) and its events.
 
+### Activity capture
+
+With the Claude Code hooks installed, the `Stop` hook runs after every turn. It reads only the bytes the transcript gained since the last turn (the offset is kept in `.atlas/capture/`) and rewrites the session's `### Activity` section for each day it touched:
+
+- the session title Claude Code generated, as the first line,
+- the first three and last five requests a person typed, with times (tool results, injected context and system notices are dropped; slash commands are kept),
+- the files changed through Edit, Write, MultiEdit and NotebookEdit,
+- commits, pushes, PRs opened or merged, and npm publishes, from shell commands,
+- the last reply of the day, and the number of requests and tool calls.
+
+No model is involved. The first turn creates the session note, so a session the agent never logged still has a record, and a day can be summarized from activity alone. The MCP server and the hooks write the same note under a shared lock, so events, summaries and activity sit side by side.
+
+A conversation that is reopened or resumed keeps the same Claude Code session id and transcript, and keeps writing to the same note. If more activity lands on a day that is already sealed, the day becomes stale.
+
+The hooks skip sessions in `capture.ignorePaths`, headless sessions (every prompt marked `turnOrigin: sdk` in the transcript) unless `capture.headless` is on, and the `claude -p` runs started by `tidy` (`TEMPORAL_ATLAS_CHILD=1`).
+
 ### Transcripts
 
-The server stores the transcript path in frontmatter and never copies transcript content into the atlas, except when summarizing an orphan session (section 5).
+The server stores the transcript path in frontmatter. Activity holds short excerpts of requests and replies, never tool output. Full conversation text reaches a model only when an orphan session is summarized (section 5).
 
 ### Secret scrubbing
 
@@ -151,7 +170,9 @@ A pending rollup is one of:
 
 - a closed period with no sealed note,
 - a sealed note marked stale,
-- an orphan session (summarized from its transcript, with tool output removed). Sessions whose transcript has less than 2,000 characters of conversation are skipped as trivial.
+- an orphan session (summarized from its transcript, with tool output removed).
+
+No day waits for an orphan session. A day seals from the sessions that have content, and becomes stale if an orphan summary for that day arrives later. Days with only orphan sessions are not worked days, so they never hold up a week or month.
 
 Rollups run per scope: `pending()` covers the session's own scope and `pending(all: true)` every scope the session can see.
 
@@ -173,6 +194,22 @@ A period can be summarized only once. `summarize(period)` takes a lock in `.atla
 The server estimates each rollup's input tokens as source characters divided by 4. `pending()` walks the list in order and marks each item `auto` while the running total stays under the gate (default 30,000 tokens). Every item after that is marked `needs_confirmation`.
 
 `summarize` refuses a `needs_confirmation` item unless it is called with `confirmed: true`. The server instructions tell the agent to get that confirmation from the user and to tell the user the estimate, for example "3 weeks of backlog: 12 rollups, about 85k tokens."
+
+### Tidy
+
+`temporal-atlas tidy` writes pending rollups without an agent session. It works through the same pending list in the same order, one `claude -p` call per rollup:
+
+```
+claude -p --model <tidy.model> --output-format json --no-session-persistence \
+  --strict-mcp-config --setting-sources project --tools "" \
+  --max-budget-usd <what is left of the run's budget> --system-prompt <...>
+```
+
+The child has no tools, no MCP servers, no user hooks and saves no transcript. The prompt is the `summarize` instructions and sources, asking for a reply that starts with a `Headline:` line. Tidy seals the reply; if the note is over the hard limit it asks once to shorten it, then gives up on that rollup until the next run.
+
+A run stops before a rollup whose input estimate plus length target would pass `tidy.maxTokens`, and once `tidy.maxUsd` is spent as `claude` reports it. Orphan sessions are left out unless `--orphans` is passed. Each rollup is appended to `.atlas/tidy.log` with its tokens and cost.
+
+`temporal-atlas install nightly` schedules `tidy --yes` at `tidy.at` (04:30 by default) with launchd on macOS, which runs a missed job when the Mac wakes, and prints a crontab line elsewhere. It sets `"rollups": "nightly"`: the server instructions, the brief and `close_session` then tell the agent the nightly run does rollups, and the day-change checkpoint stops listing them.
 
 ### Sealing
 
@@ -261,12 +298,13 @@ The server uses only tools, no MCP resources or prompts, so it behaves the same 
 
 ## 10. Claude Code adapter
 
-`npx temporal-atlas install claude-code` adds two hooks to `~/.claude/settings.json`. It prints the exact change and asks before writing.
+`npx temporal-atlas install claude-code` adds three hooks to `~/.claude/settings.json`. It prints the exact change and asks before writing.
 
-- `SessionStart` runs `temporal-atlas hook session-start`, which records the session id, working directory and transcript path in `.atlas/sessions.json`.
-- `SessionEnd` runs `temporal-atlas hook session-end`, which closes the session. If the session has no events and no summary, it becomes an orphan session.
+- `SessionStart` runs `temporal-atlas hook session-start`, which records the session id, working directory and transcript path in `.atlas/sessions.json`, reusing the note of an earlier start of the same conversation.
+- `Stop` runs `temporal-atlas hook stop` after every turn, which updates the session's activity (section 4).
+- `SessionEnd` runs `temporal-atlas hook session-end`, which reads the last turn and closes the session.
 
-There are no per-turn hooks.
+A hook never fails the agent: errors go to stderr and the hook exits 0.
 
 ## 11. CLI
 
@@ -275,8 +313,11 @@ There are no per-turn hooks.
 | `temporal-atlas` | runs the MCP server over stdio |
 | `temporal-atlas init [dir]` | creates the atlas folder and config |
 | `temporal-atlas install claude-code` | installs the hooks (asks first) |
-| `temporal-atlas doctor` | checks the atlas: broken links, stale notes, orphan sessions, frontmatter errors |
-| `temporal-atlas hook <event>` | internal, called by the hooks |
+| `temporal-atlas install nightly` | schedules `tidy --yes` (asks first; `--at`, `--remove`) |
+| `temporal-atlas tidy` | writes pending rollups with `claude -p` within a budget (`--dry-run`, `--yes`, `--scope`, `--model`, `--max-tokens`, `--max-usd`, `--orphans`) |
+| `temporal-atlas backfill` | records older sessions from their transcripts, without a model (`--dry-run`, `--prune`) |
+| `temporal-atlas doctor` | checks the atlas: backlog, unrecorded sessions, hook version, broken links, stale notes, frontmatter errors |
+| `temporal-atlas hook <event>` | internal, called by the hooks: `session-start`, `stop`, `session-end` |
 
 ## 12. Configuration
 
@@ -289,11 +330,18 @@ There are no per-turn hooks.
   "costGateTokens": 30000,
   "lengthTargets": { "segment": 1500, "day": 600, "week": 500, "month": 400, "year": 800 },
   "briefTokens": { "instructions": 1500, "tool": 5000 },
-  "scrubPatterns": []
+  "scrubPatterns": [],
+  "rollups": "agent",
+  "capture": {
+    "headless": false,
+    "ignorePaths": [],
+    "generalPaths": ["~/Library/Application Support/Claude", "~/.config/Claude", "~/AppData/Roaming/Claude"]
+  },
+  "tidy": { "command": "claude", "model": "sonnet", "maxTokens": 200000, "maxUsd": 2, "at": "04:30" }
 }
 ```
 
-`TEMPORAL_ATLAS_DIR` sets the atlas location.
+`TEMPORAL_ATLAS_DIR` sets the atlas location. Scope detection checks `capture.generalPaths` after the saved rules: a session in one of those folders goes to `general`.
 
 ## 13. Implementation
 
@@ -307,6 +355,8 @@ src/
   store/      read and write notes, frontmatter, hashes, locks
   scopes/     detection, rules, visibility
   sessions/   lifecycle, segments, events
+  capture/    activity from Claude Code transcripts, read incrementally
+  tidy/       rollups through claude -p, budgets, tidy.log
   rollup/     pending list, cost gate, sources, seal, stale propagation
   brief/      brief assembly and token caps
   search/     index build and query
@@ -329,19 +379,40 @@ The clock is injected everywhere so tests can move time.
 In v1: the stdio MCP server, the Claude Code adapter, and the CLI.
 
 Later:
-- Codex adapter (transcript import). Codex can already use every tool in v1; it only lacks automatic capture.
+- Codex adapter (activity capture from Codex transcripts). Codex can already use every tool; it only lacks automatic capture.
 - Optional semantic search.
 - A shared HTTP server so parallel sessions share one process.
 - An optional mode where the server calls a model itself, for users who want rollups without an agent.
 
-## 16. To verify during the build
+## 16. Verified in use
 
-- How the MCP server process links to the Claude Code session id. Claude Code sets `CLAUDE_CODE_SESSION_ID` for the processes it starts (confirmed for shell commands); the server reads it. To confirm for MCP servers in the end-to-end check.
-- Whether Claude Code starts stdio MCP servers in the project directory (scope detection depends on it).
-- Whether Claude Code or other clients truncate long server `instructions`.
-- The `SessionEnd` hook payload.
-- Codex hooks and transcript location, for the later adapter.
+Confirmed by 12 days of daily use in Claude Code (CLI and VS Code), October 2026:
+
+- The MCP server gets `CLAUDE_CODE_SESSION_ID` and links to the hook's record: sessions carry both the agent's events and the hook's transcript path.
+- Claude Code starts stdio MCP servers in the project directory; scopes came from git remotes as designed.
+- The `SessionEnd` payload carries `session_id`, `cwd` and `transcript_path`.
+- Reopening a VS Code conversation fires `SessionStart` and `SessionEnd` again with the same session id and transcript. v0.1 wrote a new note each time; v0.2 keeps one note per conversation.
+- `claude -p` runs fire the same hooks; their prompts are marked `turnOrigin: sdk`, interactive ones `turnOrigin: human`.
+
+Still open: whether other clients truncate long server `instructions`; Codex hooks and transcript location.
 
 ## 17. Publishing
 
 MIT license. The repository is private at `pomess/temporal-atlas` for now. Making it public and publishing to npm are separate decisions still to be made.
+
+## 18. What v0.2 changed, and why
+
+v0.1 ran for 12 days across 20 scopes. 189 sessions were recorded and no period was ever sealed. The causes:
+
+| Measured in v0.1 | Cause | v0.2 |
+|---|---|---|
+| 147 of 189 sessions (78%) were orphans | Agents often finish without `close_session` | Activity capture records every session from its transcript, without a model |
+| Every day waited on its orphans, so no week or month could start | Days were blocked until each orphan was summarized | Days no longer wait for orphans |
+| 78 orphans were 5-second `claude -p` runs of another tool, each holding a copy of a whole transcript: half the backlog | Headless runs fire the same hooks | Headless sessions are skipped |
+| 9 scopes named `scratch-2026-10-…` | Claude Desktop runs each chat in its own scratch folder | `capture.generalPaths` sends them to `general` |
+| One VS Code conversation became 10 notes | Each reopen fired `SessionStart` again | One note per conversation |
+| About 2.36M tokens pending | All of the above | About 64k tokens, none blocked, after `backfill` |
+| Brief took about 2 s | Each brief re-read orphan transcripts | Under 100 ms |
+| `doctor` said "No problems found" | It reported counts, not problems | Warnings for the backlog, unrecorded sessions and old hooks |
+
+Rollups still need someone to write them. `tidy` and `install nightly` make that a scheduled job with a budget instead of a request the agent has to remember.

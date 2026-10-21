@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const LOCK_TTL_MS = 30 * 60 * 1000;
 
@@ -36,6 +36,7 @@ export function releaseLock(dir: string, key: string) {
 /** Run `fn` while holding a short-lived cross-process mutex on `path`. */
 export function withMutex<T>(path: string, fn: () => T): T {
   const dir = `${path}.mutex`;
+  mkdirSync(dirname(path), { recursive: true });
   const deadline = Date.now() + 5000;
   for (;;) {
     try {

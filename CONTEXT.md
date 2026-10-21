@@ -64,8 +64,15 @@ The part of a session that falls within one day. A session that crosses a day bo
 A timestamped, typed entry an agent logs during a session: decision, change, finding, todo or note.
 _Avoid_: log entry, message
 
+**Activity**:
+The part of a session note the capture hooks write from the transcript after each turn, without a model: the session title, requests, files changed, commits, pushes and PRs, and the last reply.
+_Avoid_: digest, log (in prose)
+
+**Headless session**:
+A session whose every prompt came from a program (`claude -p`, the SDK) rather than a person. The hooks do not record it unless `capture.headless` is on.
+
 **Orphan session**:
-A closed session that has neither events nor a summary, so it can only be summarized from its transcript.
+A closed session that has no events, no summary and no activity, so it can only be summarized from its transcript. Since activity capture, only sessions recorded by v0.1 hooks or by clients without capture are orphans. No day waits for one.
 
 ### Summarizing
 
@@ -93,6 +100,9 @@ A dated correction appended to a sealed note, with the reason for it.
 **Checkpoint**:
 A moment when the server looks for pending rollups: session start, a day change during a session, session close, or an explicit tidy request.
 _Avoid_: sync, maintenance run
+
+**Tidy**:
+A run of `temporal-atlas tidy` that writes pending rollups with `claude -p`, inside a token and dollar budget. A nightly tidy is one the user scheduled with `install nightly`.
 
 **Cost gate**:
 The token threshold above which pending rollups need the user's confirmation before the agent does them.

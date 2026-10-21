@@ -2,6 +2,7 @@ import type { Atlas } from "../atlas.js";
 import { tokens } from "../config.js";
 import { markParentsStale, refreshAround, renderSegmentSource, ScopeView, weekday, writeIndex } from "../periods.js";
 import { isOrphan, parseSession, saveSession, sessionDays, type SessionNote } from "../sessions/note.js";
+import { statSync } from "node:fs";
 import { transcriptText } from "../sessions/transcript.js";
 import { lockHolder, releaseLock, takeLock } from "../store/lock.js";
 import { link, readNote, writeFrontmatter, writeNote } from "../store/note.js";
@@ -30,6 +31,26 @@ function orphanText(atlas: Atlas, s: SessionNote): string {
   return transcriptText(String(s.fm.transcript), atlas.config.transcriptMaxChars);
 }
 
+/** Token estimates for orphan transcripts, keyed by path and size, so a brief does not re-read large files. */
+const orphanEstimates = new Map<string, number>();
+
+function orphanTokens(atlas: Atlas, s: SessionNote): number {
+  const path = String(s.fm.transcript);
+  let size = -1;
+  try {
+    size = statSync(path).size;
+  } catch {
+    return 0;
+  }
+  const key = `${path}:${size}:${atlas.config.transcriptMaxChars}`;
+  let est = orphanEstimates.get(key);
+  if (est === undefined) {
+    est = tokens(orphanText(atlas, s));
+    orphanEstimates.set(key, est);
+  }
+  return est;
+}
+
 /** Pending rollups for one scope, without gate marks. */
 function scopeItems(atlas: Atlas, scope: string): Omit<PendingItem, "gate">[] {
   const view = new ScopeView(atlas, scope);
@@ -37,14 +58,14 @@ function scopeItems(atlas: Atlas, scope: string): Omit<PendingItem, "gate">[] {
   const cfg = atlas.config;
   const targets = cfg.lengthTargets;
   const items: Omit<PendingItem, "gate">[] = [];
-  const orphansByDay = new Map<string, string[]>();
 
+  // Orphan sessions (recorded before activity capture, or by a client without it) can be
+  // summarized from their transcripts, but no day waits for them: a day seals from what it has,
+  // and becomes stale if an orphan summary arrives later.
   for (const s of view.sessions()) {
     if (!isOrphan(s)) continue;
     const day = sessionDays(s)[0] ?? atlas.today();
-    const id = String(s.fm.session);
-    orphansByDay.set(day, [...(orphansByDay.get(day) ?? []), id]);
-    items.push({ scope, period: id, layer: "session", tokens: tokens(orphanText(atlas, s)), blocked: false, waitingOn: [], stale: false, until: day });
+    items.push({ scope, period: String(s.fm.session), layer: "session", tokens: orphanTokens(atlas, s), blocked: false, waitingOn: [], stale: false, until: day });
   }
 
   const sealedTokens = (period: string, fallback: number) => {
@@ -54,9 +75,11 @@ function scopeItems(atlas: Atlas, scope: string): Omit<PendingItem, "gate">[] {
 
   for (const day of view.workedDays()) {
     if (!isClosed(day, now, cfg) || view.status(day) === "sealed") continue;
-    const src = view.segmentsOn(day).map(renderSegmentSource).join("\n\n") + (view.humanDraftText(day) ?? "");
-    const waitingOn = orphansByDay.get(day) ?? [];
-    items.push({ scope, period: day, layer: "day", tokens: tokens(src), blocked: waitingOn.length > 0, waitingOn, stale: view.status(day) === "stale", until: day });
+    const segments = view.segmentsOn(day);
+    const human = view.humanDraftText(day);
+    if (!segments.length && !human) continue;
+    const src = segments.map(renderSegmentSource).join("\n\n") + (human ?? "");
+    items.push({ scope, period: day, layer: "day", tokens: tokens(src), blocked: false, waitingOn: [], stale: view.status(day) === "stale", until: day });
   }
 
   for (const layer of ["week", "month", "year"] as const) {
@@ -87,7 +110,7 @@ export function pending(atlas: Atlas, scopes: string[]) {
   return { items: marked, totalTokens: running, gateTokens: atlas.config.costGateTokens };
 }
 
-function lockKey(scope: string, period: string) {
+export function lockKey(scope: string, period: string) {
   return `${scope}__${period}`;
 }
 
@@ -101,11 +124,14 @@ function findItem(atlas: Atlas, scope: string, period: string): PendingItem {
   return item;
 }
 
-function lengthTarget(atlas: Atlas, layer: RollupLayer): number {
+export function lengthTarget(atlas: Atlas, layer: RollupLayer): number {
   return layer === "session" ? atlas.config.lengthTargets.segment : atlas.config.lengthTargets[layer];
 }
 
-function writingInstructions(item: PendingItem, target: number): string {
+/** How the writer hands the summary back: through the seal tool, or as a plain reply (`temporal-atlas tidy`). */
+export type WriteMode = "tool" | "reply";
+
+function writingInstructions(item: PendingItem, target: number, mode: WriteMode): string {
   const what = item.layer === "session" ? `the summary of session ${item.period} from its transcript` : `the ${item.layer} note for ${item.period}`;
   return [
     `Write ${what} in scope "${item.scope}", about ${target} tokens (hard limit ${Math.round(target * 1.5)}).`,
@@ -115,8 +141,18 @@ function writingInstructions(item: PendingItem, target: number): string {
     "### Open threads",
     "Keep names, numbers, files and decisions. Drop chatter and anything already obvious from the headline.",
     "Link sources with [[note name]] where a reader may want the detail.",
-    `Then call seal with period "${item.period}", scope "${item.scope}", a one-line headline, and the content.`,
-    "If the material changes durable knowledge, add topic_updates to seal.",
+    ...(mode === "tool"
+      ? [
+          `Then call seal with period "${item.period}", scope "${item.scope}", a one-line headline, and the content.`,
+          "If the material changes durable knowledge, add topic_updates to seal.",
+        ]
+      : [
+          "Activity sections were recorded from transcripts without a model: read the requests, files and commits to work out what was done.",
+          "Reply in exactly this format, with nothing before or after it:",
+          "Headline: <one line, under 120 characters>",
+          "",
+          "<the note>",
+        ]),
   ].join("\n");
 }
 
@@ -146,7 +182,7 @@ function sources(atlas: Atlas, item: PendingItem): string {
   return parts.join("\n\n");
 }
 
-export function summarize(atlas: Atlas, owner: string, scope: string, period: string, confirmed = false) {
+export function summarize(atlas: Atlas, owner: string, scope: string, period: string, confirmed = false, mode: WriteMode = "tool") {
   const item = findItem(atlas, scope, period);
   if (item.blocked) throw new Error(`${period} is waiting on ${item.waitingOn.join(", ")}. Seal those first.`);
   if (item.gate === "needs_confirmation" && !confirmed) {
@@ -166,7 +202,7 @@ export function summarize(atlas: Atlas, owner: string, scope: string, period: st
     layer: item.layer,
     lengthTarget: target,
     estimatedTokens: item.tokens,
-    instructions: writingInstructions(item, target),
+    instructions: writingInstructions(item, target, mode),
     sources: sources(atlas, item),
   };
 }

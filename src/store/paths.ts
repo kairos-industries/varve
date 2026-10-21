@@ -16,6 +16,20 @@ export class AtlasPaths {
   get locksDir() {
     return join(this.stateDir, "locks");
   }
+  get captureDir() {
+    return join(this.stateDir, "capture");
+  }
+  /** Capture progress for one client session: how far its transcript has been read. */
+  captureFile(clientSessionId: string) {
+    return join(this.captureDir, `${clientSessionId.replace(/[^A-Za-z0-9._-]/g, "_")}.json`);
+  }
+  /** Cross-process mutex key for one note, kept out of the vault folders. */
+  noteMutex(notePath: string) {
+    return join(this.stateDir, "mutex", notePath.slice(this.root.length + 1).replace(/[\\/]/g, "__"));
+  }
+  get tidyLog() {
+    return join(this.stateDir, "tidy.log");
+  }
   scopesRoot() {
     return join(this.root, "scopes");
   }

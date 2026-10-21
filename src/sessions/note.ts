@@ -15,6 +15,8 @@ export interface Segment {
   headline?: string;
   summary?: string;
   events: SessionEvent[];
+  /** Written by the capture hooks from the transcript, never by the agent. */
+  activity?: string;
 }
 
 export interface SessionNote {
@@ -24,7 +26,7 @@ export interface SessionNote {
 }
 
 const DAY_HEADING = /^## (\d{4}-\d{2}-\d{2})[ \t]*$/m;
-const SUB_HEADING = /^### (Headline|Summary|Events)[ \t]*$/m;
+const SUB_HEADING = /^### (Headline|Summary|Events|Activity)[ \t]*$/m;
 const EVENT_LINE = /^- (\d{2}:\d{2}) ([a-z]+): (.*)$/;
 const TOPIC_LINKS = /(?:\s*\[\[([^\]|]+)(?:\|[^\]]*)?\]\])+\s*$/;
 
@@ -52,6 +54,7 @@ export function parseSession(note: Note): SessionNote {
       const content = (chunks[j + 1] ?? "").trim();
       if (chunks[j] === "Headline") seg.headline = content || undefined;
       else if (chunks[j] === "Summary") seg.summary = content || undefined;
+      else if (chunks[j] === "Activity") seg.activity = content || undefined;
       else if (chunks[j] === "Events")
         seg.events = content.split("\n").map(parseEvent).filter((e): e is SessionEvent => Boolean(e));
     }
@@ -70,6 +73,7 @@ export function renderSegment(seg: Segment): string {
   if (seg.headline) out.push("### Headline", seg.headline, "");
   if (seg.summary) out.push("### Summary", seg.summary, "");
   if (seg.events.length) out.push("### Events", ...seg.events.map(renderEvent), "");
+  if (seg.activity) out.push("### Activity", seg.activity, "");
   return out.join("\n");
 }
 
@@ -86,25 +90,51 @@ export function saveSession(s: SessionNote): SessionNote {
   return { ...s, fm: written.fm };
 }
 
+/** True for sessions the capture skipped (headless runs, empty transcripts). They count toward no day. */
+export function isSkipped(s: SessionNote): boolean {
+  return s.fm.capture === "skipped" || s.fm.orphan === "skipped";
+}
+
 /** Days a session counts toward: its segments, or its start day for an orphan with none. */
 export function sessionDays(s: SessionNote): string[] {
+  if (isSkipped(s)) return [];
   if (s.segments.length) return s.segments.map((x) => x.day);
   return Array.isArray(s.fm.days) ? (s.fm.days as string[]) : [];
 }
 
 export function hasContent(seg: Segment): boolean {
-  return Boolean(seg.headline || seg.summary || seg.events.length);
+  return Boolean(seg.headline || seg.summary || seg.events.length || seg.activity);
 }
 
 export function isOrphan(s: SessionNote): boolean {
-  return s.fm.status === "closed" && !s.segments.some(hasContent) && typeof s.fm.transcript === "string" && s.fm.orphan !== "skipped";
+  return s.fm.status === "closed" && !s.segments.some(hasContent) && typeof s.fm.transcript === "string" && !isSkipped(s);
 }
 
 /** One-line description of a segment for drafts and briefs. */
 export function segmentHeadline(seg: Segment): string {
   if (seg.headline) return seg.headline;
   const first = seg.events[0];
-  if (!first) return "(no events)";
+  if (!first) return activityHeadline(seg.activity) ?? "(no events)";
   const more = seg.events.length > 1 ? ` (+${seg.events.length - 1} more events)` : "";
   return `${first.text}${more}`;
+}
+
+/** The session title at the top of an Activity section, or the first request. */
+export function activityHeadline(activity: string | undefined): string | undefined {
+  if (!activity) return undefined;
+  const firstLine = activity.split("\n")[0]!.trim();
+  if (firstLine && !firstLine.startsWith("- ")) return firstLine;
+  const ask = /^- \d{2}:\d{2} asked: (.*)$/m.exec(activity)?.[1];
+  return ask ? (ask.length > 120 ? `${ask.slice(0, 117)}...` : ask) : undefined;
+}
+
+/** The segment for `day`, created in date order if the session has none yet. */
+export function segmentFor(s: SessionNote, day: string): Segment {
+  let seg = s.segments.find((x) => x.day === day);
+  if (!seg) {
+    seg = { day, events: [] };
+    s.segments.push(seg);
+    s.segments.sort((a, b) => (a.day < b.day ? -1 : 1));
+  }
+  return seg;
 }

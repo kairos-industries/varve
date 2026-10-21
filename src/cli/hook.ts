@@ -7,13 +7,20 @@ export interface HookPayload {
   hook_event_name?: string;
 }
 
+/** Set for the `claude -p` runs that `temporal-atlas tidy` starts, so their own hooks record nothing. */
+export const CHILD_ENV = "TEMPORAL_ATLAS_CHILD";
+
+export const HOOK_EVENTS = ["session-start", "stop", "session-end"] as const;
+
 /** Handle one Claude Code hook call. */
-export function runHook(atlas: Atlas, event: string, payload: HookPayload) {
-  if (!payload.session_id && (event === "session-start" || event === "session-end")) {
-    return { result: "skipped", reason: "no session_id in payload" };
+export function runHook(atlas: Atlas, event: string, payload: HookPayload, env: NodeJS.ProcessEnv = process.env) {
+  if (!(HOOK_EVENTS as readonly string[]).includes(event)) {
+    throw new Error(`Unknown hook event "${event}". Use ${HOOK_EVENTS.join(", ")}.`);
   }
+  if (env[CHILD_ENV]) return { result: "skipped", reason: "a temporal-atlas child process" };
+  if (!payload.session_id) return { result: "skipped", reason: "no session_id in payload" };
   const input = {
-    sessionId: payload.session_id!,
+    sessionId: payload.session_id,
     cwd: payload.cwd,
     transcriptPath: payload.transcript_path,
     client: "claude-code",
@@ -21,9 +28,9 @@ export function runHook(atlas: Atlas, event: string, payload: HookPayload) {
   switch (event) {
     case "session-start":
       return { result: "registered", ...atlas.hookStart(input) };
-    case "session-end":
-      return atlas.hookEnd(input);
+    case "stop":
+      return atlas.capture(input);
     default:
-      throw new Error(`Unknown hook event "${event}". Use session-start or session-end.`);
+      return atlas.hookEnd(input);
   }
 }

@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { writeNote } from "../src/store/note.js";
 import { setup } from "./helpers.js";
 
 const DAY = "scopes/alpha/days/2026/2026-10-08 alpha.md";
@@ -91,49 +92,43 @@ function transcript(dir: string, chars: number) {
   return path;
 }
 
-describe("sessions recorded only by hooks", () => {
-  it("turns a session the agent never logged into an orphan summarized from its transcript", () => {
-    const t = setup("2026-10-08T10:00:00+02:00");
-    const path = transcript(t.root, 3000);
-    t.atlas.hookStart({ sessionId: "cc-1", cwd: t.cwd("alpha"), transcriptPath: path });
-    t.at("2026-10-08T11:00:00+02:00");
-    t.atlas.hookEnd({ sessionId: "cc-1", cwd: t.cwd("alpha"), transcriptPath: path });
+/** A session note as v0.1 hooks wrote it: no events, no summary, only a transcript path. */
+function legacyOrphan(t: ReturnType<typeof setup>, transcriptPath: string) {
+  const path = join(t.dir, "scopes/alpha/sessions/2026/10/2026-10-08T1000-old001.md");
+  writeNote(
+    path,
+    { atlas: "session", scope: "alpha", session: "old001", started: "2026-10-08T10:00:00+02:00", ended: "2026-10-08T11:00:00+02:00", status: "closed", transcript: transcriptPath, days: ["2026-10-08"] },
+    "# Session 2026-10-08 10:00\n\nRecorded by a hook only. Summarize it from its transcript.\n",
+  );
+  return path;
+}
 
+describe("orphan sessions from before activity capture", () => {
+  it("can be summarized from the transcript, and no day waits for them", () => {
+    const t = setup("2026-10-08T10:00:00+02:00");
+    legacyOrphan(t, transcript(t.root, 3000));
     t.at("2026-10-09T09:00:00+02:00");
     const s = t.atlas.session({ cwd: t.cwd("alpha") });
     const items = s.pending().items;
-    expect(items.map((i) => i.layer)).toEqual(["session", "day"]);
-    expect(items[1]!.blocked).toBe(true);
+    expect(items.map((i) => [i.layer, i.blocked])).toEqual([["session", false]]);
 
-    const job = s.summarize({ period: items[0]!.period });
+    const job = s.summarize({ period: "old001" });
     expect(job.sources).toContain("refactor the billing export");
     expect(job.sources).not.toContain("SECRET TOOL OUTPUT");
-    const sealed = s.seal({ period: items[0]!.period, headline: "Refactored billing export", content: "Split the exporter." });
-    expect(sealed.unblocked).toEqual(["2026-10-08"]);
+    s.seal({ period: "old001", headline: "Refactored billing export", content: "Split the exporter." });
+    expect(s.pending().items.map((i) => i.period)).toContain("2026-10-08");
     expect(s.summarize({ period: "2026-10-08" }).sources).toContain("Refactored billing export");
   });
 
-  it("skips trivial sessions", () => {
-    const t = setup("2026-10-08T10:00:00+02:00");
-    const path = transcript(t.root, 50);
-    t.atlas.hookStart({ sessionId: "cc-2", cwd: t.cwd("alpha"), transcriptPath: path });
-    t.atlas.hookEnd({ sessionId: "cc-2", cwd: t.cwd("alpha"), transcriptPath: path });
-    expect(t.files("scopes")).toEqual([]);
-  });
-
-  it("closes the note an MCP session wrote when the hook reports the end", () => {
-    const t = setup("2026-10-08T10:00:00+02:00");
-    const path = transcript(t.root, 3000);
-    t.atlas.hookStart({ sessionId: "cc-3", cwd: t.cwd("alpha"), transcriptPath: path });
-    const s = t.atlas.session({ clientSessionId: "cc-3" });
-    expect(s.scope).toBe("alpha");
-    s.log({ type: "note", text: "working" });
-    t.atlas.hookEnd({ sessionId: "cc-3", cwd: t.cwd("alpha"), transcriptPath: path });
-
-    const [note] = t.files("scopes/alpha/sessions");
-    const text = t.read(note!);
-    expect(text).toContain("status: closed");
-    expect(text).toContain(`transcript: ${path}`);
-    expect(t.files("scopes/alpha/sessions")).toHaveLength(1);
+  it("does not hold up a week whose other days are ready", () => {
+    const t = setup("2026-10-06T10:00:00+02:00");
+    const a = t.atlas.session({ cwd: t.cwd("alpha") });
+    a.closeSession({ headline: "Tuesday work", summary: "Done." });
+    legacyOrphan(t, transcript(t.root, 3000));
+    t.at("2026-10-13T09:00:00+02:00");
+    const s = t.atlas.session({ cwd: t.cwd("alpha") });
+    s.seal({ period: "2026-10-06", headline: "Tuesday", content: "Work." });
+    const week = s.pending().items.find((i) => i.period === "2026-W41")!;
+    expect(week.blocked).toBe(false);
   });
 });
