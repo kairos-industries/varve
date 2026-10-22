@@ -172,6 +172,21 @@ describe("nightly mode", () => {
 });
 
 describe("doctor warnings", () => {
+  it("does not warn in nightly mode before the first run, only when the backlog exceeds a night or the runs stop", () => {
+    const t = setup("2026-10-01T10:00:00+02:00");
+    t.atlas.session({ cwd: t.cwd("alpha") }).closeSession({ headline: "x", summary: "y".repeat(400) });
+    setRollupMode(t.dir, "nightly");
+    const at = (iso: string, tidy = { command: "claude", model: "sonnet", maxTokens: 200000, maxUsd: 2, at: "04:30" }) =>
+      new Atlas({ dir: t.dir, clock: () => new Date(iso), config: { timezone: "Europe/Madrid", costGateTokens: 10, tidy } });
+    const settings = join(t.root, "none.json");
+    expect(doctor(at("2026-10-08T10:00:00+02:00"), { settingsPath: settings }).warnings).toEqual([]);
+    const small = { command: "claude", model: "sonnet", maxTokens: 50, maxUsd: 2, at: "04:30" };
+    expect(doctor(at("2026-10-08T10:00:00+02:00", small), { settingsPath: settings }).warnings.join("\n")).toMatch(/several nights/);
+    mkdirSync(join(t.dir, ".atlas"), { recursive: true });
+    writeFileSync(join(t.dir, ".atlas/tidy.log"), `${JSON.stringify({ at: "2026-10-02T04:30:00+02:00", result: "sealed" })}\n`);
+    expect(doctor(at("2026-10-08T10:00:00+02:00"), { settingsPath: settings }).warnings.join("\n")).toMatch(/has not written one since 2026-10-02/);
+  });
+
   it("warns about a backlog over the gate and hooks from an older version", () => {
     const t = setup("2026-10-01T10:00:00+02:00");
     const atlas = new Atlas({ dir: t.dir, clock: () => new Date("2026-10-01T10:00:00+02:00"), config: { timezone: "Europe/Madrid", costGateTokens: 10 } });

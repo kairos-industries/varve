@@ -18,6 +18,10 @@ export interface DoctorReport {
   unresolvedLinks: string[];
   staleLocks: string[];
   skipped: number;
+  rollups: "agent" | "nightly";
+  tidyAt: string;
+  /** Local timestamp of the last rollup a tidy run logged. */
+  lastTidy?: string;
   /** Claude Code hook events the atlas hooks are installed for, or undefined when no atlas hook is installed. */
   hooks?: string[];
   problems: string[];
@@ -89,11 +93,18 @@ export function doctor(atlas: Atlas, opts: { settingsPath?: string } = {}): Doct
   const warnings: string[] = [];
   const backlog = pend.reduce((sum, p) => sum + p.tokens, 0);
   const count = pend.reduce((sum, p) => sum + p.count, 0);
-  if (backlog > atlas.config.costGateTokens) {
+  const lastTidy = lastTidyRun(atlas);
+  if (atlas.config.rollups === "nightly") {
+    const { maxTokens, at } = atlas.config.tidy;
+    const stalled = lastTidy !== undefined && now - lastTidy > 2 * 24 * 3600 * 1000;
+    if (count && stalled) {
+      warnings.push(`${count} rollups are waiting and the nightly run has not written one since ${new Date(lastTidy).toISOString().slice(0, 10)}. Check .atlas/tidy.out, or run \`temporal-atlas tidy\`.`);
+    } else if (backlog > maxTokens) {
+      warnings.push(`${count} rollups are waiting (about ${backlog} tokens), more than one night's ${maxTokens}-token budget, so the nightly run will take several nights. Run \`temporal-atlas tidy\` to start now.`);
+    }
+  } else if (backlog > atlas.config.costGateTokens) {
     warnings.push(
-      atlas.config.rollups === "nightly"
-        ? `${count} rollups are waiting (about ${backlog} tokens), more than the nightly run has done. Check .atlas/tidy.log, or run \`temporal-atlas tidy\`.`
-        : `${count} rollups are waiting (about ${backlog} tokens, over the ${atlas.config.costGateTokens}-token cost gate), so briefs show drafts. Ask your agent to tidy the atlas, run \`temporal-atlas tidy\`, or schedule it with \`temporal-atlas install nightly\`.`,
+      `${count} rollups are waiting (about ${backlog} tokens, over the ${atlas.config.costGateTokens}-token cost gate), so briefs show drafts. Ask your agent to tidy the atlas, run \`temporal-atlas tidy\`, or schedule it with \`temporal-atlas install nightly\`.`,
     );
   }
   if (orphans.length) {
@@ -114,6 +125,9 @@ export function doctor(atlas: Atlas, opts: { settingsPath?: string } = {}): Doct
     unresolvedLinks: [...links].filter((l) => !names.has(l)).sort(),
     staleLocks,
     skipped,
+    rollups: atlas.config.rollups,
+    tidyAt: atlas.config.tidy.at,
+    lastTidy: lastTidy === undefined ? undefined : atlas.stamp(new Date(lastTidy)),
     hooks,
     problems,
     warnings,
@@ -128,6 +142,7 @@ export function formatDoctor(r: DoctorReport): string {
   if (r.orphans.length) lines.push(`Sessions with a transcript but no record: ${r.orphans.length}`);
   if (r.skipped) lines.push(`Sessions skipped by capture (headless runs, empty transcripts): ${r.skipped}`);
   lines.push(`Claude Code hooks: ${r.hooks ? r.hooks.join(", ") : "not installed"}`);
+  if (r.rollups === "nightly") lines.push(`Rollups: nightly at ${r.tidyAt}; last tidy run: ${r.lastTidy ?? "none yet"}`);
   if (r.openSessions.length) lines.push(`Sessions open for more than 2 days: ${r.openSessions.join(", ")}`);
   if (r.unresolvedLinks.length) lines.push(`Links to notes that do not exist (often topics not yet written): ${r.unresolvedLinks.slice(0, 15).join(", ")}${r.unresolvedLinks.length > 15 ? ", ..." : ""}`);
   if (r.staleLocks.length) lines.push(`Expired rollup locks (safe to ignore): ${r.staleLocks.length}`);
@@ -135,4 +150,19 @@ export function formatDoctor(r: DoctorReport): string {
   if (r.problems.length) lines.push("", `Problems:\n${r.problems.map((p) => `  ${p}`).join("\n")}`);
   if (!r.problems.length && !r.warnings.length) lines.push("", "No problems found.");
   return lines.join("\n");
+}
+
+/** When the last tidy run wrote to .atlas/tidy.log, in milliseconds, or undefined if it never has. */
+function lastTidyRun(atlas: Atlas): number | undefined {
+  const file = atlas.paths.tidyLog;
+  if (!existsSync(file)) return undefined;
+  const lines = readFileSync(file, "utf8").trim().split("\n").filter(Boolean);
+  const last = lines.at(-1);
+  if (!last) return undefined;
+  try {
+    const at = Date.parse(JSON.parse(last).at);
+    return Number.isNaN(at) ? undefined : at;
+  } catch {
+    return undefined;
+  }
 }
