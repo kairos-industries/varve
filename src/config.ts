@@ -42,6 +42,8 @@ export interface AtlasConfig extends TimeConfig {
   transcriptMaxChars: number;
   /** Who writes rollups: the connected agent, or the nightly `temporal-atlas tidy` run. */
   rollups: "agent" | "nightly";
+  /** Mark every new scope isolated, so no project can read another's notes. For people who work for several clients. */
+  isolateNewScopes: boolean;
   capture: CaptureConfig;
   tidy: TidyConfig;
 }
@@ -55,6 +57,7 @@ export const DEFAULT_CONFIG: AtlasConfig = {
   scrubPatterns: [],
   transcriptMaxChars: 160000,
   rollups: "agent",
+  isolateNewScopes: false,
   capture: {
     headless: false,
     ignorePaths: [],
@@ -64,7 +67,7 @@ export const DEFAULT_CONFIG: AtlasConfig = {
 };
 
 /** The keys `init` writes into a new atlas.config.json. */
-export const INIT_KEYS = ["timezone", "dayBoundary", "costGateTokens", "lengthTargets", "briefTokens", "scrubPatterns", "rollups", "capture", "tidy"] as const;
+export const INIT_KEYS = ["timezone", "dayBoundary", "costGateTokens", "lengthTargets", "briefTokens", "scrubPatterns", "rollups", "isolateNewScopes", "capture", "tidy"] as const;
 
 export const CONFIG_FILE = "atlas.config.json";
 

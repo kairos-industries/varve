@@ -97,25 +97,27 @@ export interface NightlyOptions {
   remove?: boolean;
   platform?: NodeJS.Platform;
   home?: string;
+  log?: (line: string) => void;
 }
 
 /** Schedule `temporal-atlas tidy --yes` once a night, after the day boundary. */
 export async function installNightly(opts: NightlyOptions): Promise<boolean> {
+  const log = opts.log ?? ((line: string) => console.log(line));
   const at = opts.at ?? opts.config.tidy.at;
   if (!/^\d{1,2}:\d{2}$/.test(at)) throw new Error(`--at takes a local time like 04:30, not "${at}".`);
   const platform = opts.platform ?? process.platform;
   const home = opts.home ?? homedir();
   const program = tidyProgram(opts.script);
-  const log = join(opts.atlasDir, ".atlas", "tidy.out");
+  const logFile = join(opts.atlasDir, ".atlas", "tidy.out");
 
   if (platform !== "darwin") {
     if (opts.remove) {
-      console.log("Remove the temporal-atlas line from your crontab with `crontab -e`, and set \"rollups\": \"agent\" in atlas.config.json.");
+      log("Remove the temporal-atlas line from your crontab with `crontab -e`, and set \"rollups\": \"agent\" in atlas.config.json.");
       return false;
     }
-    console.log("Add this line with `crontab -e`:\n");
-    console.log(cronLine({ program, atlasDir: opts.atlasDir, at, log }));
-    console.log(`\nThen set "rollups": "nightly" in ${join(opts.atlasDir, CONFIG_FILE)} so agents leave the rollups to the nightly run.`);
+    log("Add this line with `crontab -e`:\n");
+    log(cronLine({ program, atlasDir: opts.atlasDir, at, log: logFile }));
+    log(`\nThen set "rollups": "nightly" in ${join(opts.atlasDir, CONFIG_FILE)} so agents leave the rollups to the nightly run.`);
     return false;
   }
 
@@ -123,7 +125,7 @@ export async function installNightly(opts: NightlyOptions): Promise<boolean> {
   const domain = `gui/${process.getuid?.() ?? 501}`;
   if (opts.remove) {
     if (!existsSync(plist)) {
-      console.log("No nightly run is installed.");
+      log("No nightly run is installed.");
       return false;
     }
     if (!opts.yes && !(await confirm(`Remove ${plist} and set "rollups" back to "agent"? [y/N] `))) return false;
@@ -134,27 +136,27 @@ export async function installNightly(opts: NightlyOptions): Promise<boolean> {
     }
     rmSync(plist, { force: true });
     setRollupMode(opts.atlasDir, "agent");
-    console.log("Removed. Agents will do rollups again.");
+    log("Removed. Agents will do rollups again.");
     return true;
   }
 
   const claude = findOnPath(opts.config.tidy.command);
   if (!claude) throw new Error(`Cannot find "${opts.config.tidy.command}" on PATH. Install Claude Code, or set tidy.command in atlas.config.json.`);
   const path = [...new Set([dirname(claude), dirname(process.execPath), "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"])].join(":");
-  const text = launchdPlist({ program, atlasDir: opts.atlasDir, at, path, log });
+  const text = launchdPlist({ program, atlasDir: opts.atlasDir, at, path, log: logFile });
   const { model, maxTokens, maxUsd } = opts.config.tidy;
 
-  console.log(`Every night at ${at}, run:\n  ${program.join(" ")}\n`);
-  console.log(`Each run writes pending rollups with ${claude} (model ${model}) and stops at ${maxTokens} tokens or $${maxUsd.toFixed(2)}, whichever comes first.`);
-  console.log(`Change those limits under "tidy" in ${join(opts.atlasDir, CONFIG_FILE)}.\n`);
-  console.log(`Files written:\n  ${plist} (launchd job)\n  ${join(opts.atlasDir, CONFIG_FILE)} ("rollups": "nightly", so agents stop doing rollups)`);
-  console.log(`Output goes to ${log}; every rollup is logged with its cost in ${join(opts.atlasDir, ".atlas", "tidy.log")}.`);
+  log(`Every night at ${at}, run:\n  ${program.join(" ")}\n`);
+  log(`Each run writes pending rollups with ${claude} (model ${model}) and stops at ${maxTokens} tokens or $${maxUsd.toFixed(2)}, whichever comes first.`);
+  log(`Change those limits under "tidy" in ${join(opts.atlasDir, CONFIG_FILE)}.\n`);
+  log(`Files written:\n  ${plist} (launchd job)\n  ${join(opts.atlasDir, CONFIG_FILE)} ("rollups": "nightly", so agents stop doing rollups)`);
+  log(`Output goes to ${logFile}; every rollup is logged with its cost in ${join(opts.atlasDir, ".atlas", "tidy.log")}.`);
   if (!opts.yes && !(await confirm("\nInstall the nightly run? [y/N] "))) {
-    console.log("Nothing written.");
+    log("Nothing written.");
     return false;
   }
   mkdirSync(dirname(plist), { recursive: true });
-  mkdirSync(dirname(log), { recursive: true });
+  mkdirSync(dirname(logFile), { recursive: true });
   writeFileSync(plist, text);
   try {
     execFileSync("launchctl", ["bootout", `${domain}/${LABEL}`], { stdio: "ignore" });
@@ -163,6 +165,6 @@ export async function installNightly(opts: NightlyOptions): Promise<boolean> {
   }
   execFileSync("launchctl", ["bootstrap", domain, plist]);
   setRollupMode(opts.atlasDir, "nightly");
-  console.log(`\nInstalled. If the Mac is asleep at ${at}, launchd runs it when it wakes. Remove it with: temporal-atlas install nightly --remove`);
+  log(`\nInstalled. If the Mac is asleep at ${at}, launchd runs it when it wakes. Remove it with: temporal-atlas install nightly --remove`);
   return true;
 }

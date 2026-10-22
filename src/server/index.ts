@@ -68,7 +68,7 @@ export function createServer(session: AtlasSession): McpServer {
       type: z.enum(EVENT_TYPES),
       text: z.string().min(1),
       topics: z.array(z.string()).optional().describe("Topic names this event relates to."),
-      scope: z.string().optional().describe("Only on the first call, when the scope could not be detected (no working directory)."),
+      scope: z.string().optional().describe("The project or client this session belongs to. On the first call it sets the scope when none was detected; later it moves the session there."),
     },
     (a) => {
       const r = session.log(a);

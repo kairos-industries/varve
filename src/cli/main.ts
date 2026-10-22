@@ -12,11 +12,18 @@ import { doctor, formatDoctor } from "./doctor.js";
 import { type HookPayload, runHook } from "./hook.js";
 import { installClaudeCode } from "./install.js";
 import { installNightly } from "./nightly.js";
+import { setup, uninstall } from "./setup.js";
 
 const HELP = `temporal-atlas ${VERSION}
 
 Usage:
   temporal-atlas                      Run the MCP server over stdio
+  temporal-atlas setup                Set up everything for Claude Code in one go (asks before each part)
+                                        --dir <path>         atlas folder (default: $TEMPORAL_ATLAS_DIR or ~/TemporalAtlas)
+                                        --isolate | --no-isolate   keep each project's memory apart (default: yes)
+                                        --nightly            also schedule the nightly summaries
+                                        --yes                use the defaults without asking
+  temporal-atlas uninstall            Remove the hooks, the MCP registration and the nightly run; keeps your notes
   temporal-atlas init [dir]           Create an atlas (default: $TEMPORAL_ATLAS_DIR or ~/TemporalAtlas)
   temporal-atlas install claude-code  Add the capture hooks to ~/.claude/settings.json (asks first; --yes to skip)
   temporal-atlas install nightly      Schedule \`tidy --yes\` every night (asks first; --at HH:MM, --remove)
@@ -142,6 +149,15 @@ async function main(argv: string[]) {
       }
       throw new Error("Use `install claude-code` or `install nightly`.");
     }
+    case "setup": {
+      const dir = resolve(option(rest, "--dir") ?? atlasDir());
+      const isolate = flag(rest, "--isolate") ? true : flag(rest, "--no-isolate") ? false : undefined;
+      await setup({ dir, script: fileURLToPath(import.meta.url), yes: flag(rest, "--yes"), isolate, nightly: flag(rest, "--nightly") || undefined });
+      return;
+    }
+    case "uninstall":
+      await uninstall({ dir: resolve(atlasDir()), script: fileURLToPath(import.meta.url), yes: flag(rest, "--yes") });
+      return;
     case "tidy":
       return runTidy(rest);
     case "backfill":

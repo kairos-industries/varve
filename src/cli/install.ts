@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 
 type HookEntry = { matcher?: string; hooks: { type: string; command: string; timeout?: number }[] };
-type Settings = { hooks?: Record<string, HookEntry[]> } & Record<string, unknown>;
+export type Settings = { hooks?: Record<string, HookEntry[]> } & Record<string, unknown>;
 
 /** Claude Code hook events and the `temporal-atlas hook` argument each one runs. */
 export const EVENTS: [string, string][] = [
@@ -23,6 +23,33 @@ export function mergeHooks(settings: Settings, command: string): Settings {
     hooks[event] = [...kept, { hooks: [{ type: "command", command: `${command} ${arg}`, timeout: 30 }] }];
   }
   return { ...settings, hooks };
+}
+
+/** Remove every atlas hook, keeping everything else. Events left with no hooks are dropped. */
+export function removeHooks(settings: Settings): Settings {
+  const hooks: Record<string, HookEntry[]> = {};
+  for (const [event, entries] of Object.entries(settings.hooks ?? {})) {
+    const kept = entries.filter((e) => !isAtlasHook(e));
+    if (kept.length) hooks[event] = kept;
+  }
+  const out: Settings = { ...settings, hooks };
+  if (!Object.keys(hooks).length) delete out.hooks;
+  return out;
+}
+
+export function settingsPath(home = homedir()): string {
+  return join(home, ".claude", "settings.json");
+}
+
+/** Write Claude Code settings, keeping the previous file as settings.json.bak. */
+export function writeSettings(path: string, settings: Settings) {
+  mkdirSync(dirname(path), { recursive: true });
+  if (existsSync(path)) writeFileSync(`${path}.bak`, readFileSync(path));
+  writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`);
+}
+
+export function readSettings(path: string): Settings {
+  return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
 }
 
 /** The command the hooks should run: this exact script when installed locally, npx otherwise. */

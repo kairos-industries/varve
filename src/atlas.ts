@@ -122,6 +122,15 @@ export class Atlas {
     return Boolean(cwd) && isInside(cwd!, this.config.capture.ignorePaths);
   }
 
+  /** Called before the first note of a scope is written: with isolateNewScopes, the new scope starts isolated. */
+  claimScope(scope: string) {
+    if (!this.config.isolateNewScopes || scope === GENERAL || existsSync(this.paths.scopeDir(scope))) return;
+    const file = this.scopes();
+    if (file.scopes[scope]) return;
+    file.scopes[scope] = { isolated: true };
+    writeScopes(this.paths.scopesFile, file);
+  }
+
   /** Run `fn` holding the cross-process mutex for one note. The hooks and the MCP server both write session notes. */
   withNote<T>(path: string, fn: () => T): T {
     return withMutex(this.paths.noteMutex(path), fn);
@@ -233,6 +242,7 @@ export class Atlas {
     if (!path) {
       const { date, time } = wallClock(new Date(entry.startedAt), this.config);
       path = this.paths.sessionNote(scope, date, time, entry.id);
+      this.claimScope(scope);
     }
     const notePath = path;
     const changed: string[] = [];
@@ -334,6 +344,7 @@ function originFields(det: Detection, cwd: string | undefined) {
 
 const USAGE = `Temporal Atlas is your memory of past work, layered by time: sessions, days, weeks, months, years. The current scope is "{scope}".
 - During work, call log for each decision (with the reason), notable change, finding or todo.
+- If this session's work belongs to a different client or project than "{scope}", call log with scope set to that project's name; the session moves there. Keep each client's work in its own scope.
 - Before you finish, call close_session with a one-line headline and a summary using ### Done, ### Decisions, ### Open threads.
 {rollups}
 - For more history: brief (wider view), zoom (open any period or session), search (keywords), topic (durable knowledge).
@@ -469,6 +480,7 @@ export class AtlasSession {
     this.adoptHookNote();
     if (this.path) return this.path;
     const { date, time } = wallClock(this.started, this.atlas.config);
+    this.atlas.claimScope(this.scope);
     const path = this.atlas.paths.sessionNote(this.scope, date, time, this.id);
     this.path = path;
     this.scopeLocked = true;
@@ -508,11 +520,14 @@ export class AtlasSession {
   }
 
   log(input: LogInput) {
+    this.adoptHookNote();
     if (input.scope && !this.scopeLocked) {
       this.scope = slug(input.scope);
       this.atlas.updateRegistry((reg) => {
         if (reg[this.key]) reg[this.key]!.scope = this.scope;
       });
+    } else if (input.scope && slug(input.scope) !== this.scope) {
+      this.moveTo(slug(input.scope));
     }
     const now = this.atlas.now();
     const event = {
@@ -529,6 +544,40 @@ export class AtlasSession {
       return seg.day;
     });
     return { session: this.id, scope: this.scope, day, event };
+  }
+
+  /** Move this session's note to another scope, for work done in one folder that belongs to a different client or project. */
+  private moveTo(target: string) {
+    const from = this.scope;
+    const oldPath = this.path;
+    if (!oldPath || !existsSync(oldPath)) {
+      this.scope = target;
+      this.path = undefined;
+      this.atlas.updateRegistry((reg) => {
+        if (reg[this.key]) Object.assign(reg[this.key]!, { scope: target, path: undefined });
+      });
+      return;
+    }
+    this.atlas.claimScope(target);
+    const newPath = join(this.atlas.paths.sessionsDir(target), oldPath.slice(this.atlas.paths.sessionsDir(from).length + 1));
+    const days = this.atlas.withNote(oldPath, () => {
+      const s = parseSession(readNote(oldPath)!);
+      saveSession({ ...s, path: newPath, fm: { ...s.fm, scope: target, moved_from: from } });
+      rmSync(oldPath);
+      return s.segments.map((x) => x.day);
+    });
+    this.path = newPath;
+    this.scope = target;
+    this.atlas.updateRegistry((reg) => {
+      if (reg[this.key]) Object.assign(reg[this.key]!, { scope: target, path: newPath });
+    });
+    if (this.clientSessionId) {
+      const state = this.atlas.readCapture(this.clientSessionId);
+      if (state) this.atlas.writeCapture(this.clientSessionId, { ...state, notePath: newPath });
+    }
+    this.atlas.markDaysStale(from, days);
+    refreshAround(this.atlas, from, days);
+    refreshAround(this.atlas, target, days);
   }
 
   closeSession(input: CloseInput) {

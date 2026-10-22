@@ -147,7 +147,7 @@ function writingInstructions(item: PendingItem, target: number, mode: WriteMode)
           "If the material changes durable knowledge, add topic_updates to seal.",
         ]
       : [
-          "Activity sections were recorded from transcripts without a model: read the requests, files and commits to work out what was done.",
+          "Activity sections were recorded from transcripts without a model: read the requests, files and commits to work out what was done. Requests and replies there are short excerpts by design; do not report them as truncated or missing.",
           "Reply in exactly this format, with nothing before or after it:",
           "Headline: <one line, under 120 characters>",
           "",
