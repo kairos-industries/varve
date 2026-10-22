@@ -66,75 +66,59 @@ Numbers from the author's own atlas: 12 days of daily use (8 to 20 October 2026)
 | Sessions the agent summarized itself, against their conversation text | 36x smaller |
 | Brief for the busiest project | about 1,600 tokens, built in under 100 ms |
 | Model calls made by the MCP server | 0 |
-| Test suite | 115 tests in about 3 seconds, none call a model |
+| Day and week summaries written by `tidy` (Sonnet, 6 rollups) | 6 of 6 sealed, $0.13 in total, about 2 cents each |
+| Test suite | 122 tests in about 3 seconds, none call a model |
 
 Token counts are estimated at 4 characters per token, the same rule the server uses for its cost gate. Version 0.2 came out of these 12 days: see [what changed and why](DESIGN.md#18-what-v02-changed-and-why).
 
 ## Quick start
 
-Requires Node 20 or later.
-
-**1. Create an atlas.**
+Requires Node 20 or later and [Claude Code](https://claude.com/claude-code).
 
 ```sh
-npx -y temporal-atlas init ~/TemporalAtlas
+npm install -g github:pomess/temporal-atlas
+temporal-atlas setup
 ```
 
-**2. Connect your agent.**
+`setup` shows what it will change, then asks two questions:
 
-Claude Code:
+1. **Do you work for more than one client on this machine?** If yes (the default), every project starts isolated: no project's brief, search or index shows another's work.
+2. **Write the summaries every night?** If yes, a launchd job (macOS) or crontab line (Linux) runs `temporal-atlas tidy` at 04:30 with your Claude Code sign-in, and stops at $2.00 a night. If the Mac is asleep, it runs when the Mac wakes. If no, your agent writes the summaries when you ask it to tidy the atlas.
+
+It then creates the atlas in `~/TemporalAtlas`, registers the MCP server with Claude Code for your user, and adds three hooks to `~/.claude/settings.json` (`SessionStart`, `Stop` after every turn, `SessionEnd`), keeping a backup of the file. Open a new Claude Code session in any project and the agent gets its brief.
 
 ```sh
-claude mcp add temporal-atlas --scope user -e TEMPORAL_ATLAS_DIR=$HOME/TemporalAtlas -- npx -y temporal-atlas
+temporal-atlas doctor      # check the install and the backlog
+temporal-atlas uninstall   # remove the hooks, the MCP server and the nightly run; your notes stay
 ```
 
-Codex:
+`setup --yes` takes the defaults (isolated projects, no nightly run) without asking. `setup --dir <path>` puts the atlas somewhere else. To keep it inside an Obsidian vault, use a folder in the vault, such as `--dir ~/MyVault/Atlas`. The server writes only inside that folder.
+
+### Other agents
+
+Codex, Cursor, Windsurf, VS Code and other MCP clients can use every tool. They don't get automatic capture, so the atlas holds what the agent logs and summarizes. Create the atlas with `temporal-atlas init ~/TemporalAtlas`, then add the server:
 
 ```sh
-codex mcp add temporal-atlas --env TEMPORAL_ATLAS_DIR=$HOME/TemporalAtlas -- npx -y temporal-atlas
+codex mcp add temporal-atlas --env TEMPORAL_ATLAS_DIR=$HOME/TemporalAtlas -- temporal-atlas
 ```
-
-Cursor, Windsurf, VS Code and other clients take an MCP server entry like this one:
 
 ```json
 {
   "mcpServers": {
     "temporal-atlas": {
-      "command": "npx",
-      "args": ["-y", "temporal-atlas"],
+      "command": "temporal-atlas",
       "env": { "TEMPORAL_ATLAS_DIR": "/Users/you/TemporalAtlas" }
     }
   }
 }
 ```
 
-**3. In Claude Code, record every session automatically.**
-
-```sh
-npx -y temporal-atlas install claude-code
-```
-
-This adds three hooks to `~/.claude/settings.json`: `SessionStart`, `Stop` (after every turn) and `SessionEnd`. It prints the exact change and asks before writing. From then on every conversation has a session note, even if the agent never logs anything.
-
-**4. Optional: write the summaries overnight.**
-
-```sh
-npx -y temporal-atlas install nightly
-```
-
-On macOS this adds a launchd job that runs `temporal-atlas tidy --yes` at 04:30. If the Mac is asleep, it runs when the Mac wakes. On Linux it prints a crontab line. Each run uses your existing Claude Code sign-in and stops at 200,000 tokens or $2.00, whichever comes first. Both limits are in `atlas.config.json`. Without this step, your agent writes the summaries when you ask it to tidy the atlas.
-
-**5. Start working.** Open a session in any project. The agent gets the brief, and the atlas fills in as you work.
-
-To keep the atlas inside an existing Obsidian vault, point `TEMPORAL_ATLAS_DIR` at a folder in the vault, such as `MyVault/Atlas`. The server writes only inside that folder.
-
 ### Install from source
 
 ```sh
-git clone <this repository> temporal-atlas && cd temporal-atlas
-npm install && npm run build
-claude mcp add temporal-atlas --scope user -e TEMPORAL_ATLAS_DIR=$HOME/TemporalAtlas -- node "$PWD/dist/cli/main.js"
-node dist/cli/main.js install claude-code
+git clone https://github.com/pomess/temporal-atlas.git && cd temporal-atlas
+npm install            # also builds dist/
+node dist/cli/main.js setup
 ```
 
 Run `npm run build` again after you change the code. The server and the hooks run whatever is in `dist/`.
@@ -205,12 +189,14 @@ Every session belongs to a scope, usually one project or one client. The server 
 5. The working directory name.
 6. `general`, for sessions outside any project (including your home directory).
 
-A scope marked isolated is visible only from sessions inside it. It never appears in another project's brief, in search results or in index notes, even if an agent asks for it by name. Use this when you work for more than one client on the same machine.
+A scope marked isolated is visible only from sessions inside it. It never appears in another project's brief, in search results or in index notes, even if an agent asks for it by name. With `isolateNewScopes` on (the `setup` default), every new project starts isolated. Use `scopes` to open one up, for example a personal project you want to see from everywhere.
 
 | From a session in | Can read |
 |---|---|
 | an isolated scope X | X and `general` |
 | any other scope | itself, `general`, every non-isolated scope, index notes |
+
+A scope follows the folder you start in, not the client you work for. If you prepare one client's workshop from another project's folder, tell the agent ("this is client-x work") and it calls `log` with that scope. The session note moves to client-x, and the hooks keep writing there. Sessions in your home folder or in app scratch folders go to `general`, which every scope can read, so keep client work inside its project folder.
 
 `scopes` can also merge one scope into another. Merging into an unused name is a rename.
 
@@ -236,6 +222,7 @@ Agents correct sealed notes with `amend`. An amendment adds a dated entry with i
 | "Tidy the atlas." | `pending`, then `summarize` and `seal` for each rollup |
 | "Keep this project hidden from the others." | `scopes` with `isolated` |
 | "Sessions in this folder belong to billing-api." | `scopes` with `mapHere` |
+| "This session is client-x work." | `log` with `scope: "client-x"`, which moves the session |
 | "That summary is wrong, we never dropped the export." | `amend` |
 | "What do we know about auth?" | `topic` |
 
@@ -261,6 +248,8 @@ The server uses only tools, no MCP resources or prompts, so it behaves the same 
 
 ```
 temporal-atlas                      Run the MCP server over stdio
+temporal-atlas setup                Set up everything for Claude Code (asks first; --dir, --isolate, --no-isolate, --nightly, --yes)
+temporal-atlas uninstall            Remove the hooks, the MCP registration and the nightly run; keeps your notes
 temporal-atlas init [dir]           Create an atlas (default: $TEMPORAL_ATLAS_DIR or ~/TemporalAtlas)
 temporal-atlas install claude-code  Add the capture hooks to ~/.claude/settings.json (asks first; --yes to skip)
 temporal-atlas install nightly      Schedule `tidy --yes` every night (asks first; --at HH:MM, --remove)
@@ -298,6 +287,7 @@ Budget for this run: 200000 tokens or $2.00, model sonnet.
   "briefTokens": { "instructions": 1500, "tool": 5000 },
   "scrubPatterns": [{ "name": "internal-token", "pattern": "itk_[A-Za-z0-9]{32}" }],
   "rollups": "agent",
+  "isolateNewScopes": true,
   "capture": {
     "headless": false,
     "ignorePaths": ["~/scratch"],
@@ -316,6 +306,7 @@ Budget for this run: 200000 tokens or $2.00, model sonnet.
 | `briefTokens` | Cap for the brief in the server instructions and for the `brief` tool |
 | `scrubPatterns` | Extra secret patterns, as regular expressions |
 | `rollups` | `agent`: the agent is asked to do rollups. `nightly`: agents are told the nightly run does them. Set by `install nightly`. |
+| `isolateNewScopes` | Every new project starts isolated. On by default when you answer yes in `setup`. |
 | `capture.headless` | Also record `claude -p` and other program-driven sessions |
 | `capture.ignorePaths` | Folders the hooks never record |
 | `capture.generalPaths` | Folders whose sessions go to the `general` scope |

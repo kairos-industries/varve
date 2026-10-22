@@ -10,7 +10,11 @@ Fixes found by running v0.1 for 12 days across 20 projects, where no rollup was 
 - **`temporal-atlas tidy`.** Writes pending rollups with `claude -p`, one call per rollup, inside a token and dollar budget, and logs each one to `.atlas/tidy.log`. `--dry-run` shows the plan and estimate.
 - **`temporal-atlas install nightly`.** Schedules `tidy --yes` with launchd on macOS (or prints a crontab line) and sets `"rollups": "nightly"`, so agents leave rollups to the nightly run.
 - **`temporal-atlas backfill`.** Records sessions from before activity capture using their transcripts, folds the notes of a reopened conversation into one, skips headless runs, and merges scopes that only ran in app scratch folders into `general`. No model.
-- Config: `rollups`, `capture.headless`, `capture.ignorePaths`, `capture.generalPaths`, and a `tidy` block.
+- **`temporal-atlas setup` and `uninstall`.** One command creates the atlas, registers the MCP server with Claude Code, installs the hooks and, if wanted, the nightly run; another removes all of it and keeps the notes.
+- **Client isolation by default.** `isolateNewScopes` (on when you say yes in `setup`) starts every new project isolated.
+- **Moving a session.** `log` with a `scope` moves the session to that project, for client work done in another project's folder. The capture hooks follow the move.
+- Installing from git (`npm install -g github:...`) builds the package.
+- Config: `rollups`, `isolateNewScopes`, `capture.headless`, `capture.ignorePaths`, `capture.generalPaths`, and a `tidy` block.
 
 ### Changed
 

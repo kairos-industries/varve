@@ -110,6 +110,8 @@ When a session starts, the server picks its scope in this order:
 
 An agent can set the scope on its first `log` call when the client gives no working directory (Claude Desktop, chat apps). Each session note records its origin (git remote or folder).
 
+A session moves to another scope when the agent passes `scope` to `log` after the note exists, for work done in one project's folder that belongs to another client. The note moves, the hooks follow it, and sealed days in the old scope become stale. With `isolateNewScopes`, the first note of a new scope marks it isolated.
+
 The `scopes` tool can mark a scope isolated, map the current folder to a scope for future sessions (`mapHere`), and merge one scope into another (`mergeInto`). Merging into a name that has no notes yet is a rename. A merge moves the sessions, adds rules for their origins to `scopes.json`, and marks overlapping sealed notes in the target stale.
 
 ### Visibility
