@@ -42,7 +42,8 @@ describe("install claude-code", () => {
 
   it("finds claude.cmd on PATH on Windows, and only the exact name elsewhere", () => {
     const dir = mkdtempSync(join(tmpdir(), "atlas-path-"));
-    writeFileSync(join(dir, "claude.cmd"), "");
+    // PATHEXT is upper case; Windows file names are not case-sensitive, Linux ones (where this test also runs) are.
+    writeFileSync(join(dir, "claude.CMD"), "");
     expect(findOnPath("claude", dir, "win32")?.toLowerCase()).toBe(join(dir, "claude.cmd").toLowerCase());
     expect(findOnPath("claude", dir, "linux")).toBeUndefined();
   });
