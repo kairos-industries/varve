@@ -21,7 +21,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm run build
+      - run: npm run compile
       - run: npm test
       # dist/ is committed so people can install straight from GitHub without a build step.
       - name: dist/ matches the source
@@ -30,6 +30,6 @@ jobs:
         run: |
           if [ -n "$(git status --porcelain dist)" ]; then
             git status --short dist
-            echo "dist/ is out of date. Run npm run build and commit dist/."
+            echo "dist/ is out of date. Run npm run compile and commit dist/."
             exit 1
           fi
