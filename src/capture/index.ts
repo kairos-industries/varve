@@ -130,7 +130,7 @@ export function milestone(command: string): string | undefined {
   if (merged) return `merged PR ${merged[1]}`;
   const push = /\bgit\s+push\b([^\n;&|]*)/.exec(command);
   if (push) return `pushed${push[1]!.trim() ? ` (${oneLine(push[1]!, 80)})` : ""}`;
-  if (/\bnpm\s+publish\b/.test(command)) return "published to npm";
+  if (/\bnpm\s+publish\b/.test(command) && !/\s--dry-run\b/.test(command)) return "published to npm";
   return undefined;
 }
 

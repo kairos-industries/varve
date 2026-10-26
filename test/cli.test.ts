@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { doctor } from "../src/cli/doctor.js";
-import { mergeHooks } from "../src/cli/install.js";
+import { ATLAS_HOOK, hookCommand, mergeHooks } from "../src/cli/install.js";
 import { runHook } from "../src/cli/hook.js";
 import { setup } from "./helpers.js";
 
@@ -20,6 +20,20 @@ describe("install claude-code", () => {
     const once = mergeHooks({}, "old/path/temporal-atlas hook");
     const twice = mergeHooks(once, CMD) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
     expect(twice.hooks.SessionStart!.map((h) => h.hooks[0]!.command)).toEqual([`${CMD} session-start`]);
+  });
+
+  it("passes the atlas folder as --dir, with forward slashes on Windows, and replaces the older env-prefix hooks", () => {
+    expect(hookCommand("/Users/me/Atlas", "/g/lib/node_modules/temporal-atlas/dist/cli/main.js", "darwin")).toBe(
+      'node "/g/lib/node_modules/temporal-atlas/dist/cli/main.js" --dir "/Users/me/Atlas" hook',
+    );
+    const win = hookCommand("C:\\Users\\me\\TemporalAtlas", "C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\temporal-atlas\\dist\\cli\\main.js", "win32");
+    expect(win).toBe('node "C:/Users/me/AppData/Roaming/npm/node_modules/temporal-atlas/dist/cli/main.js" --dir "C:/Users/me/TemporalAtlas" hook');
+    expect(win).not.toContain("TEMPORAL_ATLAS_DIR=");
+
+    const old = mergeHooks({}, 'TEMPORAL_ATLAS_DIR="/Users/me/Atlas" node "/repo/dist/cli/main.js" hook');
+    const updated = mergeHooks(old, hookCommand("/Users/me/Atlas", "/repo/dist/cli/main.js", "darwin")) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
+    expect(updated.hooks.Stop!.map((h) => h.hooks[0]!.command)).toEqual(['node "/repo/dist/cli/main.js" --dir "/Users/me/Atlas" hook stop']);
+    expect(ATLAS_HOOK.test("python3 ~/.claude/obsidian/capture.py stop")).toBe(false);
   });
 });
 

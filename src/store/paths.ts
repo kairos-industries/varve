@@ -30,6 +30,10 @@ export class AtlasPaths {
   get tidyLog() {
     return join(this.stateDir, "tidy.log");
   }
+  /** When the nightly schedule was installed and when it last ran. */
+  get nightlyFile() {
+    return join(this.stateDir, "nightly.json");
+  }
   scopesRoot() {
     return join(this.root, "scopes");
   }

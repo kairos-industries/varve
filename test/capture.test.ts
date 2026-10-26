@@ -215,6 +215,8 @@ describe("reading transcripts", () => {
     expect(milestone('gh pr create --title "Capture hooks" --body x')).toBe("opened PR: Capture hooks");
     expect(milestone("git push -u origin main")).toBe("pushed (-u origin main)");
     expect(milestone("ls -la")).toBeUndefined();
+    expect(milestone("npm publish --access public")).toBe("published to npm");
+    expect(milestone("npm publish --dry-run")).toBeUndefined();
   });
 
   it("reads a transcript that is still being written up to its last full line", () => {

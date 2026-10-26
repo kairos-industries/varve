@@ -1,10 +1,12 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { Atlas } from "../src/atlas.js";
 import { doctor } from "../src/cli/doctor.js";
 import { mergeHooks } from "../src/cli/install.js";
-import { cronLine, launchdPlist, setRollupMode, tidyProgram } from "../src/cli/nightly.js";
+import { cronLine, launchdPlist, readNightlyState, schtasksCommand, setRollupMode, tidyProgram, writeNightlyState } from "../src/cli/nightly.js";
 import { claudeArgs, claudeRunner, type ModelRunner, parseReply, tidy, tidyPlan } from "../src/tidy/index.js";
 import { setup } from "./helpers.js";
 
@@ -158,16 +160,63 @@ describe("nightly mode", () => {
     expect(JSON.parse(readFileSync(join(t.dir, "atlas.config.json"), "utf8")).rollups).toBe("nightly");
   });
 
-  it("builds a launchd job and a cron line that run tidy --yes", () => {
+  it("builds a launchd job, a cron line and a scheduled task that run tidy --scheduled and catch up", () => {
     const program = tidyProgram("/repo/dist/cli/main.js", "/usr/local/bin/node");
-    expect(program).toEqual(["/usr/local/bin/node", "/repo/dist/cli/main.js", "tidy", "--yes"]);
+    expect(program).toEqual(["/usr/local/bin/node", "/repo/dist/cli/main.js", "tidy", "--scheduled"]);
     const plist = launchdPlist({ program, atlasDir: "/Users/me/Atlas & Co", at: "04:30", path: "/usr/bin", log: "/tmp/tidy.out" });
     expect(plist).toContain("<integer>4</integer>");
     expect(plist).toContain("<integer>30</integer>");
     expect(plist).toContain("/Users/me/Atlas &amp; Co");
+    expect(plist).toMatch(/<key>RunAtLoad<\/key>\s*<true\/>/);
+    expect(plist).toMatch(/<key>StartInterval<\/key>\s*<integer>3600<\/integer>/);
     expect(cronLine({ program, atlasDir: "/a", at: "04:30", log: "/a/.atlas/tidy.out" })).toBe(
-      "30 4 * * * TEMPORAL_ATLAS_DIR='/a' '/usr/local/bin/node' '/repo/dist/cli/main.js' 'tidy' '--yes' >> '/a/.atlas/tidy.out' 2>&1",
+      "30 * * * * TEMPORAL_ATLAS_DIR='/a' '/usr/local/bin/node' '/repo/dist/cli/main.js' 'tidy' '--scheduled' >> '/a/.atlas/tidy.out' 2>&1",
     );
+    const win = tidyProgram("C:\\Users\\me\\npm\\main.js", "C:\\node\\node.exe");
+    expect(schtasksCommand({ program: win, atlasDir: "C:\\Users\\me\\TemporalAtlas", at: "4:30" })).toBe(
+      'schtasks /Create /TN "temporal-atlas-tidy" /SC HOURLY /ST 04:30 /TR "\\"C:\\node\\node.exe\\" \\"C:\\Users\\me\\npm\\main.js\\" \\"--dir\\" \\"C:\\Users\\me\\TemporalAtlas\\" tidy --scheduled" /F',
+    );
+  });
+
+  it.skipIf(process.platform === "win32")("runs a scheduled tidy once per atlas day, and retries when the model was never reached", () => {
+    const t = setup("2026-10-05T10:00:00+02:00");
+    workDays(t, ["2026-10-05"]);
+    const calls = join(t.root, "calls");
+    const fake = (ok: boolean) => {
+      const file = join(t.root, ok ? "claude-ok" : "claude-down");
+      writeFileSync(
+        file,
+        `#!/usr/bin/env node
+require("fs").appendFileSync(${JSON.stringify(calls)}, "x");
+let input = "";
+process.stdin.on("data", (d) => (input += d));
+process.stdin.on("end", () => {
+  if (!${ok}) { process.stderr.write("network down"); process.exit(1); }
+  const period = /# Sources for (\\S+)/.exec(input)[1];
+  process.stdout.write(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Headline: Summary of " + period + "\\n\\n- Work.", total_cost_usd: 0.01 }));
+});
+`,
+      );
+      chmodSync(file, 0o755);
+      writeFileSync(join(t.dir, "atlas.config.json"), JSON.stringify({ timezone: "Europe/Madrid", tidy: { command: file, model: "haiku", maxTokens: 100000, maxUsd: 1, at: "04:30" } }));
+    };
+    const run = () => execFileSync(process.execPath, [fileURLToPath(new URL("../dist/cli/main.js", import.meta.url)), "--dir", t.dir, "tidy", "--scheduled"], { encoding: "utf8" });
+    const called = () => (existsSync(calls) ? readFileSync(calls, "utf8").length : 0);
+
+    fake(false);
+    run();
+    expect(called()).toBeGreaterThan(0);
+    expect(readNightlyState(t.dir).lastRunDay).toBeUndefined();
+
+    fake(true);
+    const before = called();
+    expect(run()).toMatch(/Sealed [1-9]/);
+    expect(called()).toBeGreaterThan(before);
+    expect(readNightlyState(t.dir).lastRunDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    const after = called();
+    expect(run()).toBe("");
+    expect(called()).toBe(after);
   });
 });
 
@@ -179,12 +228,17 @@ describe("doctor warnings", () => {
     const at = (iso: string, tidy = { command: "claude", model: "sonnet", maxTokens: 200000, maxUsd: 2, at: "04:30" }) =>
       new Atlas({ dir: t.dir, clock: () => new Date(iso), config: { timezone: "Europe/Madrid", costGateTokens: 10, tidy } });
     const settings = join(t.root, "none.json");
-    expect(doctor(at("2026-10-08T10:00:00+02:00"), { settingsPath: settings }).warnings).toEqual([]);
+    const warnings = (iso: string, tidy?: Parameters<typeof at>[1]) => doctor(at(iso, tidy), { settingsPath: settings }).warnings.join("\n");
+
+    expect(warnings("2026-10-08T10:00:00+02:00")).toMatch(/no record of the nightly run/);
+    writeNightlyState(t.dir, { installedAt: "2026-10-08T09:00:00.000Z" });
+    expect(warnings("2026-10-08T10:00:00+02:00")).toBe("");
     const small = { command: "claude", model: "sonnet", maxTokens: 50, maxUsd: 2, at: "04:30" };
-    expect(doctor(at("2026-10-08T10:00:00+02:00", small), { settingsPath: settings }).warnings.join("\n")).toMatch(/several nights/);
-    mkdirSync(join(t.dir, ".atlas"), { recursive: true });
-    writeFileSync(join(t.dir, ".atlas/tidy.log"), `${JSON.stringify({ at: "2026-10-02T04:30:00+02:00", result: "sealed" })}\n`);
-    expect(doctor(at("2026-10-08T10:00:00+02:00"), { settingsPath: settings }).warnings.join("\n")).toMatch(/has not written one since 2026-10-02/);
+    expect(warnings("2026-10-08T10:00:00+02:00", small)).toMatch(/several nights/);
+    expect(warnings("2026-10-10T10:00:00+02:00")).toMatch(/has not run since it was installed on 2026-10-08/);
+    writeNightlyState(t.dir, { lastRunAt: "2026-10-09T04:30:00+02:00", lastRunDay: "2026-10-09" });
+    expect(warnings("2026-10-10T10:00:00+02:00")).toBe("");
+    expect(warnings("2026-10-12T10:00:00+02:00")).toMatch(/has not run since 2026-10-09/);
   });
 
   it("warns about a backlog over the gate and hooks from an older version", () => {

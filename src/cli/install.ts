@@ -13,7 +13,10 @@ export const EVENTS: [string, string][] = [
   ["SessionEnd", "session-end"],
 ];
 
-const isAtlasHook = (e: HookEntry) => e.hooks.some((h) => /temporal-atlas(\.js)?["']?\s+hook\b|cli\/main\.js["']?\s+hook\b/.test(h.command));
+/** Matches both `node ".../cli/main.js" --dir "..." hook` and the older `TEMPORAL_ATLAS_DIR=... node ".../cli/main.js" hook`. */
+export const ATLAS_HOOK = /(temporal-atlas|cli[\\/]main\.js)\b.*\shook\b/;
+
+const isAtlasHook = (e: HookEntry) => e.hooks.some((h) => ATLAS_HOOK.test(h.command));
 
 /** Add the atlas hooks to Claude Code settings, replacing any earlier atlas hooks and keeping everything else. */
 export function mergeHooks(settings: Settings, command: string): Settings {
@@ -52,11 +55,19 @@ export function readSettings(path: string): Settings {
   return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
 }
 
-/** The command the hooks should run: this exact script when installed locally, npx otherwise. */
-export function hookCommand(atlasDir: string, script: string): string {
-  const env = `TEMPORAL_ATLAS_DIR=${JSON.stringify(atlasDir)}`;
-  if (script.includes("/_npx/")) return `${env} npx -y temporal-atlas hook`;
-  return `${env} node ${JSON.stringify(script)} hook`;
+/** A path as a double-quoted shell word. On Windows, forward slashes, so bash, cmd and PowerShell all read it the same. */
+function quotePath(path: string, platform: NodeJS.Platform): string {
+  return JSON.stringify(platform === "win32" ? path.replace(/\\/g, "/") : path);
+}
+
+/** The command the hooks run. The atlas folder goes in --dir, not an environment prefix, which only POSIX shells understand. */
+export function hookCommand(atlasDir: string, script: string, platform: NodeJS.Platform = process.platform): string {
+  return `node ${quotePath(script, platform)} --dir ${quotePath(atlasDir, platform)} hook`;
+}
+
+/** How an MCP client should start the server: this exact build with this Node. */
+export function serverCommand(script: string, node = process.execPath): string[] {
+  return [node, script];
 }
 
 export async function installClaudeCode(opts: { atlasDir: string; script: string; yes: boolean; settingsPath?: string }) {
@@ -84,6 +95,6 @@ export async function installClaudeCode(opts: { atlasDir: string; script: string
   writeFileSync(path, `${JSON.stringify(after, null, 2)}\n`);
   console.log(`\nWritten. A backup of the previous file is at ${path}.bak`);
   console.log("\nIf the MCP server is not added yet, run:");
-  console.log(`  claude mcp add temporal-atlas --scope user -e TEMPORAL_ATLAS_DIR=${JSON.stringify(opts.atlasDir)} -- npx -y temporal-atlas`);
+  console.log(`  claude mcp add temporal-atlas --scope user -e TEMPORAL_ATLAS_DIR=${JSON.stringify(opts.atlasDir)} -- ${serverCommand(opts.script).map((a) => JSON.stringify(a)).join(" ")}`);
   return true;
 }

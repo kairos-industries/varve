@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { CONFIG_FILE, DEFAULT_CONFIG, INIT_KEYS, loadConfig } from "../config.js";
-import { hookCommand, mergeHooks, readSettings, removeHooks, settingsPath, writeSettings } from "./install.js";
+import { hookCommand, mergeHooks, readSettings, removeHooks, serverCommand, settingsPath, writeSettings } from "./install.js";
 import { findOnPath, installNightly } from "./nightly.js";
 
 /**
@@ -41,12 +41,6 @@ export function defaultDeps(): SetupDeps {
     home: homedir(),
     platform: process.platform,
   };
-}
-
-/** How Claude Code should start the MCP server: this exact build when installed locally, npx otherwise. */
-export function serverCommand(script: string, node = process.execPath): string[] {
-  if (script.includes("/_npx/")) return ["npx", "-y", "temporal-atlas"];
-  return [node, script];
 }
 
 /** Create the atlas folder and its config if they are missing, then set the given keys. */
@@ -106,7 +100,7 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
   const added = deps.exec(claude, ["mcp", "add", "temporal-atlas", "--scope", "user", "-e", `TEMPORAL_ATLAS_DIR=${opts.dir}`, "--", ...serverCommand(opts.script)]);
   log(added.ok ? "MCP server registered with Claude Code." : `Could not register the MCP server: ${added.out.trim()}`);
 
-  writeSettings(settings, mergeHooks(readSettings(settings), hookCommand(opts.dir, opts.script)));
+  writeSettings(settings, mergeHooks(readSettings(settings), hookCommand(opts.dir, opts.script, deps.platform)));
   log("Capture hooks installed: every Claude Code session is now recorded after each turn.");
 
   const nightly =
@@ -114,7 +108,7 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
     (opts.yes
       ? false
       : await deps.ask(
-          `\nWrite the day, week and month summaries every night at 04:30, using your Claude Code sign-in? Each night stops at $${DEFAULT_CONFIG.tidy.maxUsd.toFixed(2)}. Without this, your agent writes them when you ask it to tidy the atlas.`,
+          `\nWrite the day, week and month summaries every night at 04:30, using your Claude Code sign-in? If the computer is off then, it runs at the next login instead. Each night stops at $${DEFAULT_CONFIG.tidy.maxUsd.toFixed(2)}. Without this, your agent writes them when you ask it to tidy the atlas.`,
           false,
         ));
   if (nightly) {

@@ -6,6 +6,7 @@ import { allScopes } from "../periods.js";
 import { pending } from "../rollup/index.js";
 import { isOrphan, isSkipped, parseSession } from "../sessions/note.js";
 import { EVENTS } from "./install.js";
+import { readNightlyState } from "./nightly.js";
 import { listMarkdown, noteName, readNote } from "../store/note.js";
 
 export interface DoctorReport {
@@ -22,6 +23,8 @@ export interface DoctorReport {
   tidyAt: string;
   /** Local timestamp of the last rollup a tidy run logged. */
   lastTidy?: string;
+  /** When the schedule last ran tidy. */
+  lastScheduled?: string;
   /** Claude Code hook events the atlas hooks are installed for, or undefined when no atlas hook is installed. */
   hooks?: string[];
   problems: string[];
@@ -29,6 +32,7 @@ export interface DoctorReport {
 }
 
 const OPEN_TOO_LONG_MS = 2 * 24 * 3600 * 1000;
+const STALLED_MS = 36 * 3600 * 1000;
 
 /** Which atlas hooks Claude Code runs, read from its settings file. */
 export function installedHooks(settingsPath = join(homedir(), ".claude", "settings.json")): string[] | undefined {
@@ -40,7 +44,7 @@ export function installedHooks(settingsPath = join(homedir(), ".claude", "settin
     return undefined;
   }
   const found = EVENTS.filter(([event, arg]) =>
-    (hooks?.[event] ?? []).some((e) => (e.hooks ?? []).some((h) => new RegExp(`\\bhook\\s+${arg}\\b`).test(h.command ?? "") && /temporal-atlas|cli\/main\.js/.test(h.command ?? ""))),
+    (hooks?.[event] ?? []).some((e) => (e.hooks ?? []).some((h) => new RegExp(`\\bhook\\s+${arg}\\b`).test(h.command ?? "") && /temporal-atlas|cli[\\/]main\.js/.test(h.command ?? ""))),
   ).map(([event]) => event);
   return found.length ? found : undefined;
 }
@@ -94,11 +98,19 @@ export function doctor(atlas: Atlas, opts: { settingsPath?: string } = {}): Doct
   const backlog = pend.reduce((sum, p) => sum + p.tokens, 0);
   const count = pend.reduce((sum, p) => sum + p.count, 0);
   const lastTidy = lastTidyRun(atlas);
+  const nightly = readNightlyState(root);
   if (atlas.config.rollups === "nightly") {
-    const { maxTokens, at } = atlas.config.tidy;
-    const stalled = lastTidy !== undefined && now - lastTidy > 2 * 24 * 3600 * 1000;
-    if (count && stalled) {
-      warnings.push(`${count} rollups are waiting and the nightly run has not written one since ${new Date(lastTidy).toISOString().slice(0, 10)}. Check .atlas/tidy.out, or run \`temporal-atlas tidy\`.`);
+    const { maxTokens } = atlas.config.tidy;
+    // The schedule catches up at login, so more than a day and a half without a run means it is not firing.
+    const since = nightly.lastRunAt ?? nightly.installedAt;
+    const stalled = since !== undefined && now - Date.parse(since) > STALLED_MS;
+    if (count && since === undefined) {
+      warnings.push(
+        `${count} rollups are waiting and there is no record of the nightly run. Run \`temporal-atlas install nightly\` again: schedules from before 0.3 do not catch up when the computer was off at the set time.`,
+      );
+    } else if (count && stalled) {
+      const what = nightly.lastRunAt ? `has not run since ${nightly.lastRunAt.slice(0, 10)}` : `has not run since it was installed on ${since!.slice(0, 10)}`;
+      warnings.push(`${count} rollups are waiting and the nightly run ${what}. Check .atlas/tidy.out, run \`temporal-atlas install nightly\` again, or run \`temporal-atlas tidy\`.`);
     } else if (backlog > maxTokens) {
       warnings.push(`${count} rollups are waiting (about ${backlog} tokens), more than one night's ${maxTokens}-token budget, so the nightly run will take several nights. Run \`temporal-atlas tidy\` to start now.`);
     }
@@ -128,6 +140,7 @@ export function doctor(atlas: Atlas, opts: { settingsPath?: string } = {}): Doct
     rollups: atlas.config.rollups,
     tidyAt: atlas.config.tidy.at,
     lastTidy: lastTidy === undefined ? undefined : atlas.stamp(new Date(lastTidy)),
+    lastScheduled: nightly.lastRunAt,
     hooks,
     problems,
     warnings,
@@ -142,7 +155,7 @@ export function formatDoctor(r: DoctorReport): string {
   if (r.orphans.length) lines.push(`Sessions with a transcript but no record: ${r.orphans.length}`);
   if (r.skipped) lines.push(`Sessions skipped by capture (headless runs, empty transcripts): ${r.skipped}`);
   lines.push(`Claude Code hooks: ${r.hooks ? r.hooks.join(", ") : "not installed"}`);
-  if (r.rollups === "nightly") lines.push(`Rollups: nightly at ${r.tidyAt}; last tidy run: ${r.lastTidy ?? "none yet"}`);
+  if (r.rollups === "nightly") lines.push(`Rollups: nightly at ${r.tidyAt}; last scheduled run: ${r.lastScheduled ?? "none yet"}; last rollup written: ${r.lastTidy ?? "none yet"}`);
   if (r.openSessions.length) lines.push(`Sessions open for more than 2 days: ${r.openSessions.join(", ")}`);
   if (r.unresolvedLinks.length) lines.push(`Links to notes that do not exist (often topics not yet written): ${r.unresolvedLinks.slice(0, 15).join(", ")}${r.unresolvedLinks.length > 15 ? ", ..." : ""}`);
   if (r.staleLocks.length) lines.push(`Expired rollup locks (safe to ignore): ${r.staleLocks.length}`);

@@ -9,8 +9,9 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node: [20, 22]
     steps:
       - uses: actions/checkout@v4
@@ -20,5 +21,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
       - run: npm run build
+      - run: npm test
+      # dist/ is committed so people can install straight from GitHub without a build step.
+      - name: dist/ matches the source
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain dist)" ]; then
+            git status --short dist
+            echo "dist/ is out of date. Run npm run build and commit dist/."
+            exit 1
+          fi
