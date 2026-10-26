@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+### Fixed
+
+- Windows. Running the test suite on Windows found that the atlas assumed `/` in paths: every scope was read as a whole note path, and folder checks (`capture.ignorePaths`, `capture.generalPaths`, saved folder rules, file names in activity) never matched. `setup` could not find `claude.exe` or `claude.cmd`, and `tidy` could not start a `claude.cmd` shim; both now go through `cross-spawn`. CI runs on macOS, Linux and Windows.
+
 ## 0.3.0
 
 Ready to share with colleagues: installs from a private GitHub repository, and the nightly run works on laptops that are shut down overnight.

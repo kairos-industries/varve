@@ -38,4 +38,4 @@ The package is not published to npm (`"private": true`). To release:
 
 1. Update [CHANGELOG.md](CHANGELOG.md) and the version in `package.json` and `src/version.ts`.
 2. Run `npm run typecheck && npm test && npm run compile` and commit, `dist/` included.
-3. Tag the commit (`git tag v0.3.0`) and push the tag. People pin a version with `npm install -g github:pomess/temporal-atlas#v0.3.0`.
+3. Tag the commit (`git tag v0.3.1`) and push the tag. People pin a version with `npm install -g github:pomess/temporal-atlas#v0.3.1`.

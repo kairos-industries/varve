@@ -67,7 +67,7 @@ Numbers from the author's own atlas: 12 days of daily use (8 to 20 October 2026)
 | Brief for the busiest project | about 1,600 tokens, built in under 100 ms |
 | Model calls made by the MCP server | 0 |
 | Day and week summaries written by `tidy` (Sonnet, 6 rollups) | 6 of 6 sealed, $0.13 in total, about 2 cents each |
-| Test suite | 124 tests in about 3 seconds, none call a model |
+| Test suite | 125 tests in about 3 seconds on macOS, Linux and Windows, none call a model |
 
 Token counts are estimated at 4 characters per token, the same rule the server uses for its cost gate. Version 0.2 came out of these 12 days: see [what changed and why](DESIGN.md#18-what-v02-changed-and-why).
 
@@ -121,7 +121,7 @@ Run the install command again. It replaces the code in place, and the hooks and 
 
 ```sh
 npm install -g github:pomess/temporal-atlas          # latest
-npm install -g github:pomess/temporal-atlas#v0.3.0   # a tagged version
+npm install -g github:pomess/temporal-atlas#v0.3.1   # a tagged version
 ```
 
 From 0.2, also run `temporal-atlas install claude-code` (hooks in the new format, which also works on Windows) and, if you use the nightly run, `temporal-atlas install nightly` (catches up after the computer was off). `doctor` tells you when either is needed.
