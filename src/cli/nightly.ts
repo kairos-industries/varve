@@ -142,7 +142,7 @@ export interface NightlyOptions {
   log?: (line: string) => void;
 }
 
-/** Schedule `temporal-atlas tidy --yes` once a night, after the day boundary. */
+/** Schedule `temporal-atlas tidy --scheduled` once a night, after the day boundary, catching up at login. */
 export async function installNightly(opts: NightlyOptions): Promise<boolean> {
   const log = opts.log ?? ((line: string) => console.log(line));
   const at = opts.at ?? opts.config.tidy.at;

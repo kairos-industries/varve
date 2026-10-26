@@ -211,7 +211,7 @@ The child has no tools, no MCP servers, no user hooks and saves no transcript. T
 
 A run stops before a rollup whose input estimate plus length target would pass `tidy.maxTokens`, and once `tidy.maxUsd` is spent as `claude` reports it. Orphan sessions are left out unless `--orphans` is passed. Each rollup is appended to `.atlas/tidy.log` with its tokens and cost.
 
-`temporal-atlas install nightly` schedules `tidy --yes` at `tidy.at` (04:30 by default) with launchd on macOS, which runs a missed job when the Mac wakes, and prints a crontab line elsewhere. It sets `"rollups": "nightly"`: the server instructions, the brief and `close_session` then tell the agent the nightly run does rollups, and the day-change checkpoint stops listing them.
+`temporal-atlas install nightly` schedules `tidy --scheduled` at `tidy.at` (04:30 by default) with launchd on macOS, and prints a crontab line on Linux and a Task Scheduler command on Windows. The job also runs at login and every hour, because launchd does not run a calendar job that was missed while the computer was off (it only catches up after sleep), and laptops are often off at 04:30. `--scheduled` makes the extra runs cheap: it writes rollups at most once per atlas day, recorded in `.atlas/nightly.json`. A run that never reached the model (offline, signed out) is not recorded, so the next hour tries again. `doctor` warns when the schedule has never run or has not run for 36 hours. It sets `"rollups": "nightly"`: the server instructions, the brief and `close_session` then tell the agent the nightly run does rollups, and the day-change checkpoint stops listing them.
 
 ### Sealing
 
@@ -300,11 +300,13 @@ The server uses only tools, no MCP resources or prompts, so it behaves the same 
 
 ## 10. Claude Code adapter
 
-`npx temporal-atlas install claude-code` adds three hooks to `~/.claude/settings.json`. It prints the exact change and asks before writing.
+`temporal-atlas install claude-code` adds three hooks to `~/.claude/settings.json`. It prints the exact change and asks before writing.
 
 - `SessionStart` runs `temporal-atlas hook session-start`, which records the session id, working directory and transcript path in `.atlas/sessions.json`, reusing the note of an earlier start of the same conversation.
 - `Stop` runs `temporal-atlas hook stop` after every turn, which updates the session's activity (section 4).
 - `SessionEnd` runs `temporal-atlas hook session-end`, which reads the last turn and closes the session.
+
+Each hook runs `node "<path to dist/cli/main.js>" --dir "<atlas folder>" hook <event>`. The folder goes in `--dir` rather than a `TEMPORAL_ATLAS_DIR=` prefix, which cmd and PowerShell cannot read, and paths use forward slashes on Windows.
 
 A hook never fails the agent: errors go to stderr and the hook exits 0.
 
@@ -315,7 +317,7 @@ A hook never fails the agent: errors go to stderr and the hook exits 0.
 | `temporal-atlas` | runs the MCP server over stdio |
 | `temporal-atlas init [dir]` | creates the atlas folder and config |
 | `temporal-atlas install claude-code` | installs the hooks (asks first) |
-| `temporal-atlas install nightly` | schedules `tidy --yes` (asks first; `--at`, `--remove`) |
+| `temporal-atlas install nightly` | schedules `tidy --scheduled`, catching up after the computer was off (asks first; `--at`, `--remove`) |
 | `temporal-atlas tidy` | writes pending rollups with `claude -p` within a budget (`--dry-run`, `--yes`, `--scope`, `--model`, `--max-tokens`, `--max-usd`, `--orphans`) |
 | `temporal-atlas backfill` | records older sessions from their transcripts, without a model (`--dry-run`, `--prune`) |
 | `temporal-atlas doctor` | checks the atlas: backlog, unrecorded sessions, hook version, broken links, stale notes, frontmatter errors |
@@ -347,7 +349,7 @@ A hook never fails the agent: errors go to stderr and the hook exits 0.
 
 ## 13. Implementation
 
-TypeScript on Node 20 or later, published to npm as `temporal-atlas` and run with `npx temporal-atlas`.
+TypeScript on Node 20 or later. It is installed from the GitHub repository (`npm install -g github:pomess/temporal-atlas`), not from npm: the package is marked private, and the compiled `dist/` is committed so installing needs no build step. CI checks that `dist/` matches the source.
 
 Dependencies: `@modelcontextprotocol/sdk`, `zod`, `yaml`, `minisearch`. Tests use `vitest`.
 
@@ -400,7 +402,7 @@ Still open: whether other clients truncate long server `instructions`; Codex hoo
 
 ## 17. Publishing
 
-MIT license. The repository is private at `pomess/temporal-atlas` for now. Making it public and publishing to npm are separate decisions still to be made.
+MIT license. The shared repository is private; colleagues install from it with their GitHub access. The package is not published to npm (ADR 0005).
 
 ## 18. What v0.2 changed, and why
 

@@ -111,7 +111,7 @@ async function confirm(question) {
     rl.close();
     return answer === "y" || answer === "yes";
 }
-/** Schedule `temporal-atlas tidy --yes` once a night, after the day boundary. */
+/** Schedule `temporal-atlas tidy --scheduled` once a night, after the day boundary, catching up at login. */
 export async function installNightly(opts) {
     const log = opts.log ?? ((line) => console.log(line));
     const at = opts.at ?? opts.config.tidy.at;

@@ -6,7 +6,7 @@
 npm install
 npm test           # unit and integration tests; none call a model
 npm run typecheck
-npm run build
+npm run compile    # rebuilds dist/
 ```
 
 To try a change in your own Claude Code, point the MCP server at your build:
@@ -15,7 +15,13 @@ To try a change in your own Claude Code, point the MCP server at your build:
 claude mcp add temporal-atlas --scope user -e TEMPORAL_ATLAS_DIR=$HOME/TemporalAtlas -- node "$PWD/dist/cli/main.js"
 ```
 
-Run `npm run build` after every change; the server runs what is in `dist/`.
+Run `npm run compile` after every change; the server runs what is in `dist/`.
+
+## dist/ is committed
+
+People install Temporal Atlas straight from GitHub (`npm install -g github:pomess/temporal-atlas`), so the compiled `dist/` is part of the repository and every change to `src/` comes with its rebuilt `dist/` in the same commit. CI fails when they differ.
+
+The script is called `compile`, not `build`, on purpose: when a package installed from git has a `build` or `prepare` script, npm runs a full install inside the clone first, and with `-g` that breaks the global install.
 
 ## Rules
 
@@ -28,4 +34,8 @@ Run `npm run build` after every change; the server runs what is in `dist/`.
 
 ## Releasing
 
-`npm publish` runs typecheck, tests and build first (`prepublishOnly`). Update [CHANGELOG.md](CHANGELOG.md) and the version in `package.json` and `src/version.ts`.
+The package is not published to npm (`"private": true`). To release:
+
+1. Update [CHANGELOG.md](CHANGELOG.md) and the version in `package.json` and `src/version.ts`.
+2. Run `npm run typecheck && npm test && npm run compile` and commit, `dist/` included.
+3. Tag the commit (`git tag v0.3.0`) and push the tag. People pin a version with `npm install -g github:pomess/temporal-atlas#v0.3.0`.

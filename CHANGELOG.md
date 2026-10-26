@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.3.0
+
+Ready to share with colleagues: installs from a private GitHub repository, and the nightly run works on laptops that are shut down overnight.
+
+### Changed
+
+- **Install from GitHub.** `npm install -g github:pomess/temporal-atlas` works without a build step: `dist/` is committed, and the compile script is no longer called `build`, which made npm prepare the clone and break global installs. The package is private and is never fetched from npm; `npx temporal-atlas` is gone from the code and docs (ADR 0005).
+- **The nightly run catches up.** launchd only runs a missed calendar job after sleep, not after the computer was off, so a laptop shut down overnight never ran it. The job now also runs at login and every hour, and `tidy --scheduled` writes rollups at most once per atlas day. A run that never reached the model is tried again the next hour.
+- **Hooks work on Windows.** They pass the atlas folder as `--dir` instead of a `TEMPORAL_ATLAS_DIR=` prefix, which cmd and PowerShell cannot read, and use forward slashes there. Every command accepts `--dir`.
+- `doctor` warns when the nightly schedule has never run or has not run for 36 hours, and shows when it last ran.
+
+### Added
+
+- `tidy --scheduled`, used by the schedule; `.atlas/nightly.json` records when the schedule was installed and last ran.
+- On Windows, `install nightly` prints a Task Scheduler command.
+- CI runs on Windows, and checks that `dist/` matches the source.
+
+### Fixed
+
+- Activity capture recorded `npm publish --dry-run` as a publish.
+
+### Upgrading from 0.2
+
+```sh
+npm install -g github:pomess/temporal-atlas
+temporal-atlas install claude-code   # hooks in the new format
+temporal-atlas install nightly       # only if you use the nightly run
+```
+
 ## 0.2.0
 
 Fixes found by running v0.1 for 12 days across 20 projects, where no rollup was ever sealed.

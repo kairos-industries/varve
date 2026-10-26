@@ -67,23 +67,25 @@ Numbers from the author's own atlas: 12 days of daily use (8 to 20 October 2026)
 | Brief for the busiest project | about 1,600 tokens, built in under 100 ms |
 | Model calls made by the MCP server | 0 |
 | Day and week summaries written by `tidy` (Sonnet, 6 rollups) | 6 of 6 sealed, $0.13 in total, about 2 cents each |
-| Test suite | 122 tests in about 3 seconds, none call a model |
+| Test suite | 124 tests in about 3 seconds, none call a model |
 
 Token counts are estimated at 4 characters per token, the same rule the server uses for its cost gate. Version 0.2 came out of these 12 days: see [what changed and why](DESIGN.md#18-what-v02-changed-and-why).
 
 ## Quick start
 
-Requires Node 20 or later and [Claude Code](https://claude.com/claude-code).
+Requires Node 20 or later, [Claude Code](https://claude.com/claude-code), and read access to the [pomess/temporal-atlas](https://github.com/pomess/temporal-atlas) repository. npm fetches it with your own git credentials, so either an SSH key on your GitHub account or `gh auth setup-git` must work.
 
 ```sh
 npm install -g github:pomess/temporal-atlas
 temporal-atlas setup
 ```
 
+The package is installed straight from GitHub, with no npm registry involved. If npm says it cannot find the repository, run `gh auth setup-git` (or add an SSH key to GitHub) and try again.
+
 `setup` shows what it will change, then asks two questions:
 
 1. **Do you work for more than one client on this machine?** If yes (the default), every project starts isolated: no project's brief, search or index shows another's work.
-2. **Write the summaries every night?** If yes, a launchd job (macOS) or crontab line (Linux) runs `temporal-atlas tidy` at 04:30 with your Claude Code sign-in, and stops at $2.00 a night. If the Mac is asleep, it runs when the Mac wakes. If no, your agent writes the summaries when you ask it to tidy the atlas.
+2. **Write the summaries every night?** If yes, a launchd job runs `temporal-atlas tidy` at 04:30 with your Claude Code sign-in, and stops at $2.00 a night. If the computer is off or asleep at 04:30, the run happens at the next login or wake instead, once a day. On Linux and Windows, `setup` prints a crontab line or a Task Scheduler command for you to add. If no, your agent writes the summaries when you ask it to tidy the atlas.
 
 It then creates the atlas in `~/TemporalAtlas`, registers the MCP server with Claude Code for your user, and adds three hooks to `~/.claude/settings.json` (`SessionStart`, `Stop` after every turn, `SessionEnd`), keeping a backup of the file. Open a new Claude Code session in any project and the agent gets its brief.
 
@@ -113,17 +115,18 @@ codex mcp add temporal-atlas --env TEMPORAL_ATLAS_DIR=$HOME/TemporalAtlas -- tem
 }
 ```
 
-### Install from source
+### Updating
+
+Run the install command again. It replaces the code in place, and the hooks and the MCP server keep pointing at it:
 
 ```sh
-git clone https://github.com/pomess/temporal-atlas.git && cd temporal-atlas
-npm install            # also builds dist/
-node dist/cli/main.js setup
+npm install -g github:pomess/temporal-atlas          # latest
+npm install -g github:pomess/temporal-atlas#v0.3.0   # a tagged version
 ```
 
-Run `npm run build` again after you change the code. The server and the hooks run whatever is in `dist/`.
+From 0.2, also run `temporal-atlas install claude-code` (hooks in the new format, which also works on Windows) and, if you use the nightly run, `temporal-atlas install nightly` (catches up after the computer was off). `doctor` tells you when either is needed.
 
-### Upgrading from 0.1
+From 0.1:
 
 ```sh
 temporal-atlas install claude-code   # adds the Stop hook
@@ -132,6 +135,16 @@ temporal-atlas tidy --dry-run        # shows the backlog and its size
 ```
 
 `backfill` builds activity for older sessions from their transcripts, folds the notes of a reopened conversation into one, and skips headless runs. It uses no model.
+
+### Install from source
+
+```sh
+git clone https://github.com/pomess/temporal-atlas.git && cd temporal-atlas
+npm install
+node dist/cli/main.js setup
+```
+
+Run `npm run compile` after you change the code. The server and the hooks run whatever is in `dist/`.
 
 ## How it works
 
@@ -167,6 +180,8 @@ Invoice PDF rendering queue
 **Drafts.** While a period is open, its note is a draft that the server assembles from the notes beneath it. Drafts cost no tokens and show in Obsidian as they grow.
 
 **Rollups and sealing.** Once a period ends, it becomes a pending rollup. Someone reads its sources, writes a summary to a length target, and seals it: your agent through the `summarize` and `seal` tools, or `temporal-atlas tidy`. The server rejects a summary longer than 150% of its target. Days roll up into both weeks and months, because ISO weeks cross month boundaries. Months roll up into years.
+
+**Nightly runs.** `install nightly` schedules `tidy --scheduled` at 04:30, at login and every hour. Only the first of those in an atlas day does anything, so a laptop that was shut down overnight catches up when you log in, and the other runs exit at once. A run that could not reach the model, because you were offline or signed out, is tried again the next hour. `doctor` warns if the schedule has never run, or has not run for a day and a half.
 
 **Cost control.** The server estimates the input tokens of every pending rollup. An agent runs rollups under the cost gate (30,000 tokens by default) without asking, and must tell you the estimate and wait for your yes above it. `tidy` runs inside its own token and dollar budget instead, passes the remaining dollar budget to every `claude` call, and logs each rollup with its cost to `.atlas/tidy.log`. Two writers cannot summarize the same period at once. A lock file blocks the second one for up to 30 minutes.
 
@@ -252,14 +267,17 @@ temporal-atlas setup                Set up everything for Claude Code (asks firs
 temporal-atlas uninstall            Remove the hooks, the MCP registration and the nightly run; keeps your notes
 temporal-atlas init [dir]           Create an atlas (default: $TEMPORAL_ATLAS_DIR or ~/TemporalAtlas)
 temporal-atlas install claude-code  Add the capture hooks to ~/.claude/settings.json (asks first; --yes to skip)
-temporal-atlas install nightly      Schedule `tidy --yes` every night (asks first; --at HH:MM, --remove)
+temporal-atlas install nightly      Schedule `tidy --scheduled` every night, catching up after the computer was off
+                                      (asks first; --at HH:MM, --remove)
 temporal-atlas tidy                 Write pending rollups with `claude -p`, within a token and dollar budget
-                                      --dry-run, --yes, --scope <name>, --model <name>,
+                                      --dry-run, --yes, --scheduled, --scope <name>, --model <name>,
                                       --max-tokens <n>, --max-usd <amount>, --orphans
 temporal-atlas backfill             Record older sessions from their transcripts, without a model
                                       --dry-run, --prune (delete headless runs instead of marking them)
 temporal-atlas doctor               Check the atlas: backlog, unrecorded sessions, hooks, broken notes
 temporal-atlas hook <event>         Called by the hooks; not for direct use
+
+Every command takes --dir <path> for the atlas folder instead of $TEMPORAL_ATLAS_DIR.
 ```
 
 A `tidy --dry-run` prints the plan before anything is spent:
@@ -313,7 +331,7 @@ Budget for this run: 200000 tokens or $2.00, model sonnet.
 | `tidy.command` | The Claude Code CLI to run |
 | `tidy.model` | Model for tidy runs. `haiku` costs less, `sonnet` writes better summaries. |
 | `tidy.maxTokens`, `tidy.maxUsd` | A tidy run stops before passing either |
-| `tidy.at` | Local time for `install nightly` |
+| `tidy.at` | Local time for `install nightly`. A computer that is off then catches up at the next login. |
 | `transcriptMaxChars` | Transcript text handed to an orphan rollup is cut to this length (default 160,000) |
 
 ## What's on disk
@@ -337,6 +355,7 @@ Every note has YAML frontmatter (`layer`, `period`, `scope`, `status`, `headline
 
 ## Limits
 
+- Windows: the hooks and the server are written to work there, and the test suite runs on Windows in CI, but day-to-day use so far has been on macOS. The nightly run needs the Task Scheduler command that `install nightly` prints.
 - Automatic activity capture exists for Claude Code only. In other clients, the atlas records what the agent logs and summarizes through the tools.
 - Activity says what was asked and changed, not why. The why comes from the agent's `log` events and summaries.
 - Rollups need a writer: your agent, or `tidy`. Until a period is sealed, the brief shows its draft.
@@ -350,7 +369,7 @@ Every note has YAML frontmatter (`layer`, `period`, `scope`, `status`, `headline
 npm install
 npm test           # unit and integration tests; none call a model
 npm run typecheck
-npm run build
+npm run compile    # rebuilds dist/, which is committed
 ```
 
 Tests use a fake clock, so they cover day boundaries, ISO weeks at year ends and sessions that span several days without waiting. Integration tests start the real server and drive it through the MCP SDK client. `tidy` is tested with a fake model and a fake `claude` executable.
