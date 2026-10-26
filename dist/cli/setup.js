@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import spawn from "cross-spawn";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -14,14 +14,12 @@ export function defaultDeps() {
             rl.close();
             return answer ? answer === "y" || answer === "yes" : fallback;
         },
+        // cross-spawn, so a claude.cmd shim on Windows runs too.
         exec: (command, args) => {
-            try {
-                return { ok: true, out: execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) };
-            }
-            catch (e) {
-                const err = e;
-                return { ok: false, out: err.stderr || err.message };
-            }
+            const r = spawn.sync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+            if (r.error)
+                return { ok: false, out: r.error.message };
+            return r.status === 0 ? { ok: true, out: r.stdout } : { ok: false, out: r.stderr || `exited with code ${r.status}` };
         },
         log: (line) => console.log(line),
         home: homedir(),

@@ -1,5 +1,5 @@
 import { appendFileSync, mkdirSync } from "node:fs";
-import { spawn } from "node:child_process";
+import spawn from "cross-spawn";
 import { dirname } from "node:path";
 import { CHILD_ENV } from "../cli/hook.js";
 import { tokens } from "../config.js";
@@ -32,7 +32,7 @@ export function claudeArgs(model, maxUsd) {
         "--system-prompt", SYSTEM,
     ];
 }
-/** Run each rollup through the Claude Code CLI the user already has signed in. */
+/** Run each rollup through the Claude Code CLI the user already has signed in. cross-spawn also runs a claude.cmd shim on Windows. */
 export function claudeRunner(atlas) {
     return (prompt, opts) => new Promise((resolve, reject) => {
         mkdirSync(atlas.paths.stateDir, { recursive: true });

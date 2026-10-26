@@ -54,7 +54,7 @@ export function detectScope(cwd, file, generalPaths = []) {
             return { scope: rule.scope, remote, gitRoot };
     }
     const pathRule = file.rules
-        .filter((r) => r.kind === "path" && (dir === r.match || dir.startsWith(`${r.match}/`)))
+        .filter((r) => r.kind === "path" && isInside(dir, [r.match]))
         .sort((a, b) => b.match.length - a.match.length)[0];
     if (pathRule)
         return { scope: pathRule.scope, remote, gitRoot };

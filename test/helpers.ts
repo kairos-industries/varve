@@ -18,7 +18,7 @@ export function setup(start: string) {
       now = new Date(iso);
     },
     cwd: (name: string) => join(root, "work", name),
-    files: (sub = "") => listMarkdown(join(dir, sub)).map((p) => p.slice(dir.length + 1)),
+    files: (sub = "") => listMarkdown(join(dir, sub)).map((p) => p.slice(dir.length + 1).replace(/\\/g, "/")),
     read: (rel: string) => readFileSync(join(dir, rel), "utf8"),
     write: (rel: string, text: string) => writeFileSync(join(dir, rel), text),
     root,

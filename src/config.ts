@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import type { ScrubPattern } from "./scrub/index.js";
 import type { TimeConfig } from "./time/index.js";
 
@@ -95,8 +95,11 @@ export function expandHome(path: string): string {
   return resolve(path.replace(/^~(?=$|[\\/])/, homedir()));
 }
 
-/** True when `dir` is one of `roots` or inside one of them. */
+/** True when `dir` is one of `roots` or inside one of them, with either path separator. */
 export function isInside(dir: string, roots: string[]): boolean {
   const target = resolve(dir);
-  return roots.map(expandHome).some((root) => target === root || target.startsWith(`${root}/`));
+  return roots.map(expandHome).some((root) => {
+    const rel = relative(root, target);
+    return rel === "" || (rel.split(/[\\/]/)[0] !== ".." && !isAbsolute(rel));
+  });
 }

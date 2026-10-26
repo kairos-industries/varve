@@ -1,5 +1,6 @@
 import { closeSync, existsSync, fstatSync, openSync, readSync } from "node:fs";
-import { relative } from "node:path";
+import { isAbsolute, relative } from "node:path";
+import { isInside } from "../config.js";
 import { dayOf, wallClock } from "../time/index.js";
 export function newCaptureState() {
     return { offset: 0, humanTurns: 0, programTurns: 0, days: {} };
@@ -143,7 +144,7 @@ export function absorb(state, lines, config) {
             if (b.name && FILE_TOOLS.has(b.name)) {
                 const file = String(input.file_path ?? input.notebook_path ?? "");
                 if (file) {
-                    const shown = state.cwd && file.startsWith(`${state.cwd}/`) ? relative(state.cwd, file) : file;
+                    const shown = state.cwd && isAbsolute(file) && isInside(file, [state.cwd]) ? relative(state.cwd, file).replace(/\\/g, "/") : file;
                     if (!d.files.includes(shown) && d.files.length < MAX_FILES)
                         d.files.push(shown);
                 }

@@ -1,7 +1,11 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { doctor } from "../src/cli/doctor.js";
 import { ATLAS_HOOK, hookCommand, mergeHooks } from "../src/cli/install.js";
 import { runHook } from "../src/cli/hook.js";
+import { findOnPath } from "../src/cli/nightly.js";
 import { setup } from "./helpers.js";
 
 const CMD = "temporal-atlas hook";
@@ -34,6 +38,13 @@ describe("install claude-code", () => {
     const updated = mergeHooks(old, hookCommand("/Users/me/Atlas", "/repo/dist/cli/main.js", "darwin")) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
     expect(updated.hooks.Stop!.map((h) => h.hooks[0]!.command)).toEqual(['node "/repo/dist/cli/main.js" --dir "/Users/me/Atlas" hook stop']);
     expect(ATLAS_HOOK.test("python3 ~/.claude/obsidian/capture.py stop")).toBe(false);
+  });
+
+  it("finds claude.cmd on PATH on Windows, and only the exact name elsewhere", () => {
+    const dir = mkdtempSync(join(tmpdir(), "atlas-path-"));
+    writeFileSync(join(dir, "claude.cmd"), "");
+    expect(findOnPath("claude", dir, "win32")?.toLowerCase()).toBe(join(dir, "claude.cmd").toLowerCase());
+    expect(findOnPath("claude", dir, "linux")).toBeUndefined();
   });
 });
 

@@ -110,7 +110,8 @@ describe("parsing model replies", () => {
 });
 
 describe("the claude runner", () => {
-  it("passes no tools, no MCP servers, no user hooks and no transcript, and reads the JSON result", async () => {
+  // The fake claude is a script with a shebang, which Windows cannot run directly.
+  it.skipIf(process.platform === "win32")("passes no tools, no MCP servers, no user hooks and no transcript, and reads the JSON result", async () => {
     const t = setup("2026-10-05T10:00:00+02:00");
     const fake = join(t.root, "fake-claude");
     const argsFile = join(t.root, "args.json");
@@ -137,7 +138,7 @@ process.stdin.on("end", () => {
     expect(seen.args[seen.args.indexOf("--max-budget-usd") + 1]).toBe("0.75");
   });
 
-  it("reports a budget stop from claude", async () => {
+  it.skipIf(process.platform === "win32")("reports a budget stop from claude", async () => {
     const t = setup("2026-10-05T10:00:00+02:00");
     const fake = join(t.root, "fake-claude");
     writeFileSync(fake, `#!/bin/sh\ncat > /dev/null\necho '{"type":"result","subtype":"error_max_budget_usd","is_error":true,"total_cost_usd":0.5}'\n`);
