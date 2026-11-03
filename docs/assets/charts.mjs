@@ -22,6 +22,8 @@ const THEMES = {
     neutral: "#c3c2b7",
     // Ordinal blue ramp, session (lightest) to year (darkest); no step lighter than 250 on this surface.
     layers: ["#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281"],
+    // The silver logo is near white, so the light hero uses the black one.
+    kairos: { file: "black", opacity: 0.35 },
   },
   dark: {
     surface: "#1a1a19",
@@ -34,6 +36,7 @@ const THEMES = {
     neutral: "#5c5b56",
     // Same ramp, lightest for the year; no step darker than 600 on this surface.
     layers: ["#184f95", "#256abf", "#3987e5", "#6da7ec", "#b7d3f6"],
+    kairos: { file: "silver", opacity: 0.55 },
   },
 };
 
@@ -78,6 +81,12 @@ function hero(t) {
     `<text x="${x}" y="432" fill="${t.ink2}" font-size="20"><tspan font-size="30" font-weight="700" fill="${t.ink}">${esc(value)}</tspan>  ${esc(label)}</text>`;
   parts.push(stat(64, pct(r.hybrid.hit5), `of ${r.probes} real questions answered in the top five`));
   parts.push(stat(640, `${Math.round(r.hybrid.ms)} ms`, "per search, on your machine"));
+  // Kairos Industries, small and faint at the end of the strip. Embedded, since an SVG shown as
+  // an image can't load other files.
+  const logo = readFileSync(join(out, `kairos-industries-${t.kairos.file}.png`)).toString("base64");
+  const logoW = 120;
+  const logoH = Math.round((logoW * 119) / 420);
+  parts.push(`<image x="${W - 64 - logoW}" y="${432 - logoH + 4}" width="${logoW}" height="${logoH}" opacity="${t.kairos.opacity}" href="data:image/png;base64,${logo}"/>`);
   parts.push(text(64, 104, "MCP SERVER FOR CLAUDE CODE, CODEX AND ANY MCP CLIENT", { size: 13, fill: t.muted, weight: 600, extra: ` letter-spacing="1.2"` }));
   // The mark stands as tall as the name's capitals.
   parts.push(mark(64, 130, 48, t));

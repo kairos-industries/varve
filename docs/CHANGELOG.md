@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **The repository moved to `kairos-industries/varve`.** `npm install -g github:pomess/varve` and old links still work, because GitHub redirects them.
+
 ## 0.5.0
 
 Temporal Atlas is now **Varve**, and topic notes hold dated claims and open items, so the atlas is organized by topic as well as by time.

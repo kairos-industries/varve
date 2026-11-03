@@ -21,7 +21,7 @@ Run `npm run compile` after every change; the server runs what is in `dist/`.
 
 ## dist/ is committed
 
-People install Varve straight from GitHub (`npm install -g github:pomess/varve`), so the compiled `dist/` is part of the repository and every change to `src/` comes with its rebuilt `dist/` in the same commit. CI fails when they differ.
+People install Varve straight from GitHub (`npm install -g github:kairos-industries/varve`), so the compiled `dist/` is part of the repository and every change to `src/` comes with its rebuilt `dist/` in the same commit. CI fails when they differ.
 
 The script is called `compile`, not `build`, on purpose: when a package installed from git has a `build` or `prepare` script, npm runs a full install inside the clone first, and with `-g` that breaks the global install.
 
@@ -42,4 +42,4 @@ The package is not published to npm (`"private": true`). To release:
 1. Update [CHANGELOG.md](../docs/CHANGELOG.md) and the version in `package.json` and `src/version.ts`.
 2. Run `npm run typecheck && npm test && npm run compile` and commit, `dist/` included.
 3. Run `varve bench --fixture --sweep --json > docs/benchmark/fixture-<version>.json` with the search model installed. If the scores moved, update [BENCHMARK.md](../docs/BENCHMARK.md) and redraw the README figures with `npm run charts`.
-4. Tag the commit (`git tag v0.4.0`) and push the tag. People pin a version with `npm install -g github:pomess/varve#v0.4.0`.
+4. Tag the commit (`git tag v0.4.0`) and push the tag. People pin a version with `npm install -g github:kairos-industries/varve#v0.5.0`.

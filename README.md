@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/pomess/varve/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/pomess/varve/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/kairos-industries/varve/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/kairos-industries/varve/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2a78d6"></a>
   <img alt="Node 20 or later" src="https://img.shields.io/badge/node-%E2%89%A520-2a78d6">
   <img alt="Model Context Protocol" src="https://img.shields.io/badge/MCP-server-2a78d6">
@@ -53,7 +53,7 @@ Everything lives in one folder of plain Markdown, the atlas. Open it in Obsidian
 Requires Node 20 or later and [Claude Code](https://claude.com/claude-code) or [Codex](https://developers.openai.com/codex).
 
 ```sh
-npm install -g github:pomess/varve
+npm install -g github:kairos-industries/varve
 varve setup
 ```
 
@@ -305,8 +305,8 @@ The server uses only tools, no MCP resources or prompts, so it behaves the same 
 Run the install command again. It replaces the code in place, and the hooks and the MCP server keep pointing at it:
 
 ```sh
-npm install -g github:pomess/varve          # latest
-npm install -g github:pomess/varve#v0.4.0   # a tagged version
+npm install -g github:kairos-industries/varve          # latest
+npm install -g github:kairos-industries/varve#v0.4.0   # a tagged version
 ```
 
 From an earlier version, run `varve setup` again, then `varve doctor`, which names anything else to run. Varve was called Temporal Atlas until 0.5: setup replaces the `temporal-atlas` MCP registration, and the old command, `TEMPORAL_ATLAS_*` variables and an existing `~/TemporalAtlas` folder keep working.
@@ -314,7 +314,7 @@ From an earlier version, run `varve setup` again, then `varve doctor`, which nam
 The package is installed straight from GitHub and is not on the npm registry. To work on it:
 
 ```sh
-git clone https://github.com/pomess/varve.git && cd varve
+git clone https://github.com/kairos-industries/varve.git && cd varve
 npm install
 node dist/cli/main.js setup
 ```
