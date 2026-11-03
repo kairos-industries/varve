@@ -74,8 +74,8 @@ varve uninstall   # remove hooks, MCP registrations and the nightly run; your no
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/search-quality-dark.svg">
-    <img alt="Bar chart. Answer in the first five results: 97% on the author's atlas, 83% on 36 held-out hard questions, 75% on all 69 hard questions. Answer as the first result: 87%, 61% and 55%." src="docs/assets/search-quality-light.svg" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/headline-dark.svg">
+    <img alt="Search on four weeks of real work: 97% of 200 questions find the answer in the first five results, 87% as the very first result. 7 ms median per search, 12 of 12 exact names found on the hard test, no network calls. These questions reuse words from their notes; on the reworded hard test, 83% held out and 75% overall." src="docs/assets/headline-light.svg" width="100%">
   </picture>
 </p>
 

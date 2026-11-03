@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="440" viewBox="0 0 880 440" role="img" aria-label="Search on four weeks of real work: 97% of 200 questions find the answer in the first five results, 87% as the first result, in 7 ms" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+<rect width="880" height="440" rx="12" fill="#1a1a19"/>
+<text x="32" y="48" font-size="22" font-weight="700" fill="#f0efec" text-anchor="start">Search on four weeks of real work</text>
+<text x="32" y="74" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="start">200 questions about 126 sessions in 16 projects. Default search, Varve 0.5.0, on a laptop.</text>
+<rect x="32" y="100" width="400" height="176" rx="12" fill="none" stroke="#2c2c2a" stroke-width="1.5"/>
+<text x="56" y="192" font-size="84" font-weight="700" fill="#3987e5" text-anchor="start" letter-spacing="-2">97%</text>
+<text x="56" y="224" font-size="14" font-weight="400" fill="#c3c2b7" text-anchor="start">of questions find the answer in the first five results</text>
+<rect x="56" y="246" width="352" height="8" rx="4" fill="#2c2c2a"/>
+<rect x="56" y="246" width="341.4" height="8" rx="4" fill="#3987e5"/>
+<rect x="448" y="100" width="400" height="176" rx="12" fill="none" stroke="#2c2c2a" stroke-width="1.5"/>
+<text x="472" y="192" font-size="84" font-weight="700" fill="#3987e5" text-anchor="start" letter-spacing="-2">87%</text>
+<text x="472" y="224" font-size="14" font-weight="400" fill="#c3c2b7" text-anchor="start">find it as the very first result</text>
+<rect x="472" y="246" width="352" height="8" rx="4" fill="#2c2c2a"/>
+<rect x="472" y="246" width="306.2" height="8" rx="4" fill="#3987e5"/>
+<text x="32" y="336" font-size="34" font-weight="700" fill="#f0efec" text-anchor="start">7 ms</text>
+<text x="32" y="362" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="start">median time per search</text>
+<text x="304" y="336" font-size="34" font-weight="700" fill="#f0efec" text-anchor="start">12 / 12</text>
+<text x="304" y="362" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="start">exact names and terms found (hard test)</text>
+<text x="576" y="336" font-size="34" font-weight="700" fill="#f0efec" text-anchor="start">0</text>
+<text x="576" y="362" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="start">network calls: search runs on your machine</text>
+<line x1="32" y1="388" x2="848" y2="388" stroke="#2c2c2a" stroke-width="1"/>
+<text x="32" y="414" font-size="12" font-weight="400" fill="#898781" text-anchor="start">These questions reuse words from their notes. On the reworded hard test below: 83% held out, 75% overall.</text>
+</svg>
