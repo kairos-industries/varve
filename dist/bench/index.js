@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildBrief } from "../brief.js";
@@ -202,17 +202,34 @@ export function eventQuery(text) {
     const clause = text.split(/[;:—]|, (?:so|because|but|which)\b|\. /)[0];
     return clause.split(/\s+/).filter(Boolean).slice(0, 8).join(" ").replace(/[.,]$/, "");
 }
+const NAME = /`([^`\n]{3,40})`|\b([A-Za-z0-9]+(?:[._/-][A-Za-z0-9]+)+)\b|\b([a-z]+[A-Z][A-Za-z0-9]*|[A-Z][a-z]+[A-Z][A-Za-z0-9]*)\b|\b([A-Z]{3,}[0-9]*)\b/g;
+/** Names someone might look up exactly: code spans, file names and paths, identifiers, acronyms. */
+export function exactNames(text) {
+    const out = new Set();
+    for (const m of text.matchAll(NAME)) {
+        const [code, path, camel, acronym] = m.slice(1);
+        const name = (code ?? path ?? camel ?? acronym);
+        // A plain hyphenated word such as "per-session" is not a name.
+        if (name.replace(/[^A-Za-z]/g, "").length >= 3 && (code || /[A-Z0-9._/]/.test(name)))
+            out.add(name);
+    }
+    return [...out];
+}
 /** A stable order that does not follow note dates, so a capped sample spreads over the whole atlas. */
 const shuffleKey = (s) => createHash("sha256").update(s).digest("hex");
 /**
  * Probes from the user's own atlas, searched within the probe's own scope as an agent there would.
  * event: a logged decision, finding or change, to find its session (known-item search: the words
  * are in the note, so this flatters keyword search). summary: a sealed day or week headline, to
- * find the notes it was written from (the headline is new wording).
+ * find the notes it was written from (the headline is new wording). exact: a name from a logged
+ * event that appears in no other note of the scope, to find its session. Events and summaries
+ * share the cap; exact names have their own.
  */
 export function ownProbes(atlas, scopes, max = 200) {
     const probes = [];
+    const exact = [];
     for (const scope of scopes) {
+        const texts = listMarkdown(atlas.paths.scopeDir(scope)).map((p) => readFileSync(p, "utf8").toLowerCase());
         for (const p of listMarkdown(atlas.paths.sessionsDir(scope))) {
             const note = readNote(p);
             if (!note || note.error)
@@ -220,12 +237,20 @@ export function ownProbes(atlas, scopes, max = 200) {
             const s = parseSession(note);
             if (isSkipped(s))
                 continue;
+            const names = new Set();
             for (const seg of s.segments) {
                 for (const e of seg.events.filter((x) => x.type === "decision" || x.type === "finding" || x.type === "change")) {
                     const query = eventQuery(e.text);
                     if (query.split(" ").length >= 3)
                         probes.push({ query, relevant: [noteName(p)], kind: "event", scopes: [scope] });
+                    for (const name of exactNames(e.text))
+                        names.add(name);
                 }
+            }
+            for (const name of names) {
+                const lower = name.toLowerCase();
+                if (texts.filter((t) => t.includes(lower)).length === 1)
+                    exact.push({ query: name, relevant: [noteName(p)], kind: "exact", scopes: [scope] });
             }
         }
         for (const layer of ["days", "weeks"]) {
@@ -238,7 +263,8 @@ export function ownProbes(atlas, scopes, max = 200) {
             }
         }
     }
-    return probes.sort((a, b) => shuffleKey(a.query).localeCompare(shuffleKey(b.query))).slice(0, max);
+    const sample = (list) => list.sort((a, b) => shuffleKey(a.query).localeCompare(shuffleKey(b.query))).slice(0, max);
+    return [...sample(probes), ...sample(exact)];
 }
 export function benchOwn(atlas, opts = {}) {
     const model = opts.model ?? installedEmbedder();

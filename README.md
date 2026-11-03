@@ -75,19 +75,20 @@ varve uninstall   # remove hooks, MCP registrations and the nightly run; your no
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/headline-dark.svg">
-    <img alt="Search on four weeks of real work: 97% of 200 questions find the answer in the first five results, 87% as the very first result. 7 ms median per search, 12 of 12 exact names found on the hard test, no network calls. These questions reuse words from their notes; on the reworded hard test, 83% held out and 75% overall." src="docs/assets/headline-light.svg" width="100%">
+    <img alt="Search on four weeks of real work: 97% of 400 questions find the answer in the first five results, 83% as the very first result. 6 ms median per search, 96% of 200 exact names found in the top five, no network calls. These questions reuse words from their notes; on the reworded hard test, 83% held out and 75% overall." src="docs/assets/headline-light.svg" width="100%">
   </picture>
 </p>
 
 | Default search (keyword + meaning) | Answer first | Answer in the top five |
 |---|---|---|
-| Real work: the author's atlas, 200 questions | 87% | 97% |
+| Real work: the author's atlas, 400 questions | 83% | 97% |
+| Real work, exact names only (200 of the 400) | 82% | 96% |
 | Hard test: 36 held-out questions | 61% | 83% |
 | Hard test: all 69 questions | 55% | 75% |
 
 The two datasets bracket everyday use:
 
-- **Real work** asks about decisions and findings logged over four weeks of the author's daily work in Claude Code. The questions reuse words from their notes, so they flatter search.
+- **Real work** is built from four weeks of the author's daily work in Claude Code (128 sessions in 17 projects): 177 logged decisions and findings, 200 names that appear in only one note (files, products, identifiers, acronyms), and 23 headlines of sealed day and week summaries. The questions reuse words from their notes, so they flatter search.
 - **The hard test** is a bundled atlas of 26 invented sessions in three projects with 69 hand-written questions, the same on every machine. Most are reworded the way a colleague asks weeks later, without the note's distinctive words: "the spreadsheet download we got rid of" for a note about removing the CSV export. The 36 held-out questions were written after the defaults were chosen and never used to tune them.
 
 An agent reads several results and can search again in other words, so "in the top five" is closer to whether it found what it needed than "first".
@@ -95,7 +96,7 @@ An agent reads several results and can search again in other words, so "in the t
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/search-quality-dark.svg">
-    <img alt="Bar chart. Answer in the first five results: 97% on the author's atlas, 83% on 36 held-out hard questions, 75% on all 69 hard questions. Answer as the first result: 87%, 61% and 55%." src="docs/assets/search-quality-light.svg" width="100%">
+    <img alt="Bar chart. Answer in the first five results: 97% of 400 questions on the author's atlas, 83% on 36 held-out hard questions, 75% on all 69 hard questions. Answer as the first result: 83%, 61% and 55%." src="docs/assets/search-quality-light.svg" width="100%">
   </picture>
 </p>
 
@@ -108,7 +109,7 @@ An agent reads several results and can search again in other words, so "in the t
 
 What the numbers say, and what they don't:
 
-- **Names and exact terms are always found**: 12 of 12 on the hard test.
+- **Names are found.** 96% of 200 names from real work are in the top five, and 12 of 12 on the hard test. Keyword search alone does a little better on names (98%), because matches by meaning can push a name's note down a place.
 - **Adding meaning to keyword search helps.** On the same questions it ranks the answer higher on 12 and lower on 5: +0.09 MRR (0.03 to 0.17) on all questions, +0.10 (0.01 to 0.22) on the held-out ones. Meaning alone is worse than keyword alone, so the two are fused.
 - **Rewording is the weak spot.** Reworded questions found in the top five rose from 54% in 0.3.1 to 71%: search stopped ranking day and week drafts above the sessions they repeat, and matches by meaning were added. The search model is small (30 MB, no native code); a larger one would likely do better here.
 - **Date ranges are too few to judge.** Five questions, three found in the top five.
@@ -117,12 +118,12 @@ What the numbers say, and what they don't:
 
 Mean reciprocal rank scores how high the answer ranks: 1.00 when it is always first, 0.50 when it is second on average.
 
-| Mean reciprocal rank (95% interval) | Hard test, all 69 | Hard test, 36 held-out | Real work, 200 |
+| Mean reciprocal rank (95% interval) | Hard test, all 69 | Hard test, 36 held-out | Real work, 400 |
 |---|---|---|---|
 | 0.3.1, keyword | 0.47 (0.36 to 0.56) | 0.58 (0.44 to 0.72) | |
-| 0.4.0, keyword only | 0.55 (0.44 to 0.65) | 0.61 (0.48 to 0.75) | 0.94 (0.92 to 0.97) |
-| 0.4.0, meaning only | 0.44 (0.35 to 0.56) | 0.43 (0.28 to 0.60) | 0.84 (0.80 to 0.89) |
-| **0.4.0, keyword + meaning (default)** | **0.64 (0.54 to 0.74)** | **0.71 (0.59 to 0.84)** | **0.92 (0.88 to 0.95)** |
+| 0.4.0, keyword only | 0.55 (0.44 to 0.65) | 0.61 (0.48 to 0.75) | 0.91 (0.90 to 0.93) |
+| 0.4.0, meaning only | 0.44 (0.35 to 0.56) | 0.43 (0.28 to 0.60) | 0.68 (0.65 to 0.73) |
+| **0.4.0, keyword + meaning (default)** | **0.64 (0.54 to 0.74)** | **0.71 (0.59 to 0.84)** | **0.89 (0.87 to 0.92)** |
 
 Real work was measured with 0.5.0, whose search is the same as 0.4.0's. On it keyword alone scores a little higher than the default, as expected when the questions reuse the notes' words.
 

@@ -54,8 +54,9 @@ The dev paraphrases avoid every distinctive word of their target note. The test 
 
 - **event**: a logged decision, finding or change, cut to its first clause (at most eight words), to find the session that logged it. It is searched within its own scope, as an agent working there would. The query's words are in the target note, so this is known-item search, and it flatters keyword search.
 - **summary**: a sealed day or week headline, to find the notes it was written from. The headline is new wording. These appear once rollups are sealed.
+- **exact**: a name from a logged event that appears in no other note of its scope: a code span, a file name or path, an identifier such as `invoice_id` or `LaunchDarkly`, or an acronym. It is searched on its own, to find the session that logged it. A plain hyphenated word such as "per-session" doesn't count as a name.
 
-At most 200 probes are used (`--max`), sampled across the whole atlas.
+At most 200 event and summary probes are used (`--max`), and at most 200 exact ones, each sampled across the whole atlas. `--paraphrase` leaves exact probes out: a bare name has nothing to reword.
 
 **Paraphrased** (`--paraphrase`, optional, paid). A model rewords your atlas's queries the way a colleague would ask from memory, and the rewordings are scored. This removes the word-overlap advantage of event probes. Only the queries are sent, through your own `claude` CLI. It shows the estimate, asks first, and stops at `--max-usd` (default $0.25, model `haiku`).
 
@@ -118,17 +119,28 @@ Brief, 0.4.0: 195 tokens on average; todos from the last 14 days shown: **0 of 3
 
 ### The author's atlas
 
-16 scopes and 126 sessions from about four weeks of daily work in Claude Code. No rollups were sealed, so all 200 probes are event probes.
+17 scopes and 128 sessions from about four weeks of daily work in Claude Code, with some days and weeks sealed: 400 probes ([author-0.5.0.json](benchmark/author-0.5.0.json)).
 
-| Mode | hit@1 | hit@5 | MRR (95% interval) | ms |
-|---|---|---|---|---|
-| keyword | 0.91 | 0.98 | 0.94 (0.92 to 0.97) | 6 |
-| meaning | 0.79 | 0.91 | 0.84 (0.80 to 0.89) | 6 |
-| keyword + meaning (default) | 0.87 | 0.97 | 0.92 (0.88 to 0.95) | 6 |
+| Probes | Mode | hit@1 | hit@5 | MRR (95% interval) | ms |
+|---|---|---|---|---|---|
+| event (177) | keyword | 0.87 | 0.98 | 0.92 (0.88 to 0.95) | 9 |
+| | meaning | 0.75 | 0.90 | 0.81 (0.77 to 0.87) | 7 |
+| | **keyword + meaning (default)** | **0.83** | **0.97** | **0.89 (0.84 to 0.93)** | 6 |
+| exact (200) | keyword | 0.85 | 0.98 | 0.91 (0.87 to 0.93) | 5 |
+| | meaning | 0.47 | 0.58 | 0.52 (0.46 to 0.59) | 2 |
+| | **keyword + meaning (default)** | **0.82** | **0.96** | **0.88 (0.84 to 0.92)** | 6 |
+| summary (23) | keyword | 0.91 | 1.00 | 0.94 (0.85 to 1.00) | 3 |
+| | meaning | 1.00 | 1.00 | 1.00 (1.00 to 1.00) | 2 |
+| | **keyword + meaning (default)** | **0.96** | **1.00** | **0.98 (0.94 to 1.00)** | 3 |
+| all (400) | keyword | 0.86 | 0.98 | 0.91 (0.90 to 0.93) | 6 |
+| | meaning | 0.62 | 0.75 | 0.68 (0.65 to 0.73) | 3 |
+| | **keyword + meaning (default)** | **0.83** | **0.97** | **0.89 (0.87 to 0.92)** | 6 |
 
-As expected for known-item probes, keyword search is near the ceiling, and fusing in matches by meaning costs a little. The threshold sweep moves MRR by no more than 0.01 between 0.20 and 0.45.
+As expected for known-item probes, keyword search is near the ceiling on events and names, and fusing in matches by meaning costs a little (MRR 0.91 to 0.89 on all 400; better on 29 probes, worse on 44). On summary headlines, which are new wording, meaning alone finds every one first. The threshold sweep moves hybrid MRR by no more than 0.02 between 0.20 and 0.45.
 
-Brief, 0.4.0: 901 tokens on average across 9 scopes with recent work, 1,423 at most, built in 5 ms; todos from the last 14 days shown: **0 of 4**. 0.5.0: 939 tokens on average, **4 of 4** shown ([author-0.5.0.json](benchmark/author-0.5.0.json)).
+An earlier run on the same atlas, with 126 sessions and event probes only, scored 0.87 hit@1 and 0.97 hit@5.
+
+Brief, 0.4.0: 901 tokens on average across 9 scopes with recent work, 1,423 at most, built in 5 ms; todos from the last 14 days shown: **0 of 4**. 0.5.0: 981 tokens on average across 10 scopes, 1,700 at most, **4 of 4** shown.
 
 ## What the results say so far
 
@@ -136,7 +148,7 @@ Brief, 0.4.0: 901 tokens on average across 9 scopes with recent work, 1,423 at m
 
 1. **Fusing meaning with keyword search helps where people paraphrase**, and the gain holds on the held-out questions (+0.10 MRR, interval 0.01 to 0.22). The intervals are wide because the fixture is small.
 2. **Meaning alone is worse than keyword alone** on every split, so it is only used fused.
-3. **On known-item search, fusing costs a little** (0.94 to 0.92 on the author's atlas). The paraphrased tier on real atlases will show whether the trade holds when people ask in their own words.
+3. **On known-item search, fusing costs a little** (MRR 0.91 to 0.89 on the author's atlas, 0.91 to 0.88 on exact names). The paraphrased tier on real atlases will show whether the trade holds when people ask in their own words.
 4. **The brief dropped open todos, and 0.5.0 fixes it.** 0.4.0 showed the open threads of the last session only, so a todo logged three sessions ago disappeared (0% on both datasets). 0.5.0 shows open items from topics and todos from days no rollup has read yet (100% on both, for 20 to 40 more tokens). This check only covers todos on days not yet rolled up; whether rollups carry the still-open ones into topics needs questions about sealed periods, which the fixture does not have yet.
 5. **The model is small.** potion-base-8M runs in plain TypeScript with no native code and no download at search time. A larger model would likely do better on paraphrases, and a report comparing models is welcome.
 

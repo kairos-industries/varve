@@ -158,7 +158,7 @@ function searchQuality(t) {
   const author = report("author-0.5.0").retrieval;
   const W = 880;
   const datasets = [
-    { label: "Real work: the author's atlas, 200 questions", r: author.all },
+    { label: `Real work: the author's atlas, ${author.all.probes} questions`, r: author.all },
     { label: "Hard test: 36 held-out questions", r: fixture.test },
     { label: "Hard test: all 69 questions", r: fixture.all },
   ];
@@ -179,7 +179,7 @@ function searchQuality(t) {
     y += r.height + 52;
   }
   const H = y - 10;
-  return svg(W, H, t, parts.join("\n"), "Bar chart: the answer is in the first five results for 97% of questions on the author's atlas, 83% of held-out hard questions and 75% of all hard questions; first for 87%, 61% and 55%");
+  return svg(W, H, t, parts.join("\n"), `Bar chart: the answer is in the first five results for ${pct(author.all.hybrid.hit5)} of ${author.all.probes} questions on the author's atlas, ${pct(fixture.test.hybrid.hit5)} of held-out hard questions and ${pct(fixture.all.hybrid.hit5)} of all hard questions; first for ${pct(author.all.hybrid.hit1)}, ${pct(fixture.test.hybrid.hit1)} and ${pct(fixture.all.hybrid.hit1)}`);
 }
 
 // ---- headline: search on the author's atlas ----
@@ -192,7 +192,7 @@ function headline(t) {
   const H = 440;
   const parts = [];
   parts.push(text(32, 48, "Search on four weeks of real work", { size: 22, fill: t.ink, weight: 700 }));
-  parts.push(text(32, 74, `${r.probes} questions about ${real.atlas.sessions} sessions in ${real.atlas.scopes} projects. Default search, Varve ${real.version}, on a laptop.`, { size: 13, fill: t.ink2 }));
+  parts.push(text(32, 74, `${r.probes} questions about ${real.atlas.sessions} sessions in ${real.atlas.scopes} projects: decisions, findings, summaries and names. Default search, Varve ${real.version}.`, { size: 13, fill: t.ink2 }));
 
   // Two big tiles: the answer in the top five, and the answer first.
   const tiles = [
@@ -212,10 +212,10 @@ function headline(t) {
   });
 
   // Three smaller facts underneath.
-  const exact = fixture.exact;
+  const exact = real.retrieval.exact;
   const facts = [
     { value: `${Math.round(r.hybrid.ms)} ms`, label: "median time per search" },
-    { value: `${Math.round(exact.hybrid.hit5 * exact.probes)} / ${exact.probes}`, label: "exact names and terms found (hard test)" },
+    { value: pct(exact.hybrid.hit5), label: `of ${exact.probes} exact names found in the top five` },
     { value: "0", label: "network calls: search runs on your machine" },
   ];
   const factW = (W - 64) / facts.length;
@@ -227,7 +227,7 @@ function headline(t) {
 
   parts.push(`<line x1="32" y1="388" x2="${W - 32}" y2="388" stroke="${t.grid}" stroke-width="1"/>`);
   parts.push(text(32, 414, `These questions reuse words from their notes. On the reworded hard test below: ${pct(fixture.test.hybrid.hit5)} held out, ${pct(fixture.all.hybrid.hit5)} overall.`, { size: 12, fill: t.muted }));
-  return svg(W, H, t, parts.join("\n"), `Search on four weeks of real work: ${pct(r.hybrid.hit5)} of 200 questions find the answer in the first five results, ${pct(r.hybrid.hit1)} as the first result, in ${Math.round(r.hybrid.ms)} ms`);
+  return svg(W, H, t, parts.join("\n"), `Search on four weeks of real work: ${pct(r.hybrid.hit5)} of 200 questions find the answer in the first five results, ${pct(r.hybrid.hit1)} as the first result, in ${Math.round(r.hybrid.ms)} ms; ${pct(exact.hybrid.hit5)} of ${exact.probes} exact names in the top five`);
 }
 
 // ---- by kind: 0.3.1 against now ----
