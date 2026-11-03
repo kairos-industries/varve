@@ -10,7 +10,7 @@ import { MIN_SIMILARITY, search } from "../search.js";
 import { isSkipped, parseSession } from "../sessions/note.js";
 import { listMarkdown, noteName, readNote } from "../store/note.js";
 import { VERSION } from "../version.js";
-import { buildFixture, FIXTURE_QUESTIONS } from "./fixture.js";
+import { ALL_FIXTURE_QUESTIONS, buildFixture } from "./fixture.js";
 const round = (n, places = 3) => Math.round(n * 10 ** places) / 10 ** places;
 const median = (xs) => {
     if (!xs.length)
@@ -18,38 +18,92 @@ const median = (xs) => {
     const s = [...xs].sort((a, b) => a - b);
     return s[Math.floor(s.length / 2)];
 };
-function scoreMode(atlas, probes, mode, model, minSimilarity) {
-    let hit1 = 0;
-    let hit5 = 0;
-    let rr = 0;
+const BOOTSTRAP = 2000;
+/** A seeded generator, so intervals are the same on every run. */
+function lcg(seed = 1) {
+    let x = seed;
+    return () => (x = (x * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+}
+/** 95% percentile bootstrap interval of the mean. */
+export function bootstrap(values) {
+    if (!values.length)
+        return [0, 0];
+    const next = lcg();
+    const means = [];
+    for (let t = 0; t < BOOTSTRAP; t++) {
+        let sum = 0;
+        for (let j = 0; j < values.length; j++)
+            sum += values[Math.floor(next() * values.length)];
+        means.push(sum / values.length);
+    }
+    means.sort((a, b) => a - b);
+    return [round(means[Math.floor(BOOTSTRAP * 0.025)]), round(means[Math.floor(BOOTSTRAP * 0.975) - 1])];
+}
+/** Reciprocal rank of the first relevant note per probe (0 when it is not in the first ten). */
+function ranks(atlas, probes, mode, model, minSimilarity) {
+    const rr = [];
     const times = [];
     for (const p of probes) {
         const t = performance.now();
         const results = search(atlas, { query: p.query, scopes: p.scopes, layer: p.layer, from: p.from, to: p.to, limit: 10 }, { mode, embedder: model, minSimilarity });
         times.push(performance.now() - t);
         const rank = results.findIndex((r) => p.relevant.includes(r.note));
-        if (rank === 0)
-            hit1++;
-        if (rank >= 0 && rank < 5)
-            hit5++;
-        if (rank >= 0)
-            rr += 1 / (rank + 1);
+        rr.push(rank < 0 ? 0 : 1 / (rank + 1));
     }
-    const n = probes.length || 1;
-    return { hit1: round(hit1 / n), hit5: round(hit5 / n), mrr: round(rr / n), ms: round(median(times), 1) };
+    return { rr, times };
 }
-/** Score every probe kind, and all of them together, in each search mode the model allows. */
+function summarize(rr, times) {
+    const n = rr.length || 1;
+    const hit5 = rr.map((x) => (x >= 0.2 ? 1 : 0));
+    return {
+        hit1: round(rr.filter((x) => x === 1).length / n),
+        hit5: round(hit5.reduce((a, b) => a + b, 0) / n),
+        mrr: round(rr.reduce((a, b) => a + b, 0) / n),
+        hit5Ci: bootstrap(hit5),
+        mrrCi: bootstrap(rr),
+        ms: round(median(times), 1),
+    };
+}
+function compare(hybrid, keyword) {
+    const diff = hybrid.map((h, i) => h - keyword[i]);
+    return {
+        mrrDelta: round(diff.reduce((a, b) => a + b, 0) / (diff.length || 1)),
+        ci95: bootstrap(diff),
+        better: diff.filter((d) => d > 0).length,
+        worse: diff.filter((d) => d < 0).length,
+    };
+}
+function scoreMode(atlas, probes, mode, model, minSimilarity) {
+    const { rr, times } = ranks(atlas, probes, mode, model, minSimilarity);
+    return summarize(rr, times);
+}
+/**
+ * Score probe groups in each search mode the model allows: every kind, and all together. With
+ * splits (the fixture), each split and each kind within it.
+ */
 export function retrieval(atlas, probes, model) {
     const modes = model ? ["keyword", "semantic", "hybrid"] : ["keyword"];
+    const runs = new Map(modes.map((m) => [m, ranks(atlas, probes, m, model)]));
     const kinds = [...new Set(probes.map((p) => p.kind))].sort();
+    const splits = [...new Set(probes.map((p) => p.split).filter((x) => Boolean(x)))].sort();
+    const groups = splits.length
+        ? splits.flatMap((sp) => [[sp, (p) => p.split === sp], ...kinds.map((k) => [`${sp}/${k}`, (p) => p.split === sp && p.kind === k])])
+        : [];
+    groups.push(...kinds.map((k) => [k, (p) => p.kind === k]));
+    groups.push(["all", () => true]);
     const out = {};
-    for (const kind of [...kinds, "all"]) {
-        const set = kind === "all" ? probes : probes.filter((p) => p.kind === kind);
-        if (!set.length)
+    for (const [name, keep] of groups) {
+        const idx = probes.flatMap((p, i) => (keep(p) ? [i] : []));
+        if (!idx.length)
             continue;
-        out[kind] = { probes: set.length };
-        for (const mode of modes)
-            out[kind][mode] = scoreMode(atlas, set, mode, model);
+        const entry = { probes: idx.length };
+        for (const mode of modes) {
+            const r = runs.get(mode);
+            entry[mode] = summarize(idx.map((i) => r.rr[i]), idx.map((i) => r.times[i]));
+        }
+        if (model)
+            entry.hybridVsKeyword = compare(idx.map((i) => runs.get("hybrid").rr[i]), idx.map((i) => runs.get("keyword").rr[i]));
+        out[name] = entry;
     }
     return out;
 }
@@ -121,8 +175,8 @@ function header(dataset, atlas, scopes, model) {
 export const SWEEP = [0.2, 0.25, 0.3, 0.35, 0.4, 0.45];
 export function sweep(atlas, probes, model) {
     return Object.fromEntries(SWEEP.map((t) => {
-        const { ms: _ms, ...s } = scoreMode(atlas, probes, "hybrid", model, t);
-        return [t.toFixed(2), s];
+        const { hit1, hit5, mrr } = scoreMode(atlas, probes, "hybrid", model, t);
+        return [t.toFixed(2), { hit1, hit5, mrr }];
     }));
 }
 /** Run the fixture: build it in a temporary folder, score it, delete it. */
@@ -131,7 +185,7 @@ export function benchFixture(model = installedEmbedder(), opts = {}) {
     try {
         const { atlas, notes } = buildFixture(root);
         const scopes = allScopes(atlas);
-        const probes = FIXTURE_QUESTIONS.map((q) => ({ ...q, relevant: q.relevant.map((k) => notes.get(k)), scopes }));
+        const probes = ALL_FIXTURE_QUESTIONS.map((q) => ({ ...q, relevant: q.relevant.map((k) => notes.get(k)), scopes }));
         return {
             ...header("fixture", atlas, scopes, model),
             retrieval: retrieval(atlas, probes, model),
@@ -244,15 +298,19 @@ export function formatReport(r) {
         `Temporal Atlas benchmark ${r.version}, ${r.dataset} dataset, ${r.ranOn}`,
         `Atlas: ${r.atlas.scopes} scopes, ${r.atlas.sessions} sessions. Search model: ${r.model ? r.model.name : "none (keyword only; run `temporal-atlas models pull`)"}`,
         "",
-        "Search        probes  mode      hit@1  hit@5  MRR    ms",
+        "Search             probes  mode      hit@1  hit@5  MRR (95% interval)   ms",
     ];
+    const ci = (c) => `${c[0].toFixed(2)}-${c[1].toFixed(2)}`;
     for (const [kind, v] of Object.entries(r.retrieval)) {
         for (const mode of ["keyword", "semantic", "hybrid"]) {
             const s = v[mode];
             if (!s)
                 continue;
-            lines.push(`${kind.padEnd(14)}${String(v.probes).padStart(6)}  ${mode.padEnd(9)} ${s.hit1.toFixed(2).padStart(5)}  ${s.hit5.toFixed(2).padStart(5)}  ${s.mrr.toFixed(2).padStart(5)} ${String(s.ms).padStart(5)}`);
+            lines.push(`${kind.padEnd(19)}${String(v.probes).padStart(6)}  ${mode.padEnd(9)} ${s.hit1.toFixed(2).padStart(5)}  ${s.hit5.toFixed(2).padStart(5)}  ${s.mrr.toFixed(2)} (${ci(s.mrrCi)})  ${String(s.ms).padStart(5)}`);
         }
+        const c = v.hybridVsKeyword;
+        if (c)
+            lines.push(`${"".padEnd(25)}hybrid - keyword MRR ${c.mrrDelta >= 0 ? "+" : ""}${c.mrrDelta.toFixed(2)} (${ci(c.ci95)}), better on ${c.better}, worse on ${c.worse}`);
     }
     if (r.sweep) {
         lines.push("", "Similarity threshold (hybrid, all probes)  hit@1  hit@5  MRR");

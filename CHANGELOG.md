@@ -8,12 +8,12 @@ Open source, at `pomess/temporal-atlas`. Codex sessions are recorded like Claude
 
 - **Codex capture.** `setup` (when `~/.codex` exists) and `install codex` add the capture hooks to `~/.codex/hooks.json` and register the server with `codex mcp add`. Codex rollouts are read into the same activity record. `codex exec` runs and subagents count as headless. Codex does not pass a conversation id to MCP servers, so the server joins the Codex conversation that started in the same folder within five minutes. Run `/hooks` in Codex once to trust the new hooks.
 - **Search by meaning.** `temporal-atlas models pull` (or `setup`) downloads potion-base-8M (about 30 MB, MIT) from a pinned Hugging Face revision and checks its hashes. Search then fuses keyword (BM25) and meaning matches, and each result says how it matched. The encoder is plain TypeScript: no native code, nothing sent anywhere. Without the model, search is keyword only, as before. `semanticSearch: false` in `atlas.config.json` turns it off.
-- **Benchmark.** `temporal-atlas bench` scores search and the brief with no model call. `--fixture` runs a bundled atlas that gives the same scores everywhere. On your own atlas it only reads, and its report holds numbers only. `--sweep` scores similarity thresholds, and `--paraphrase` has a model reword the queries (paid, asks first, `--max-usd`). See [BENCHMARK.md](BENCHMARK.md).
+- **Benchmark.** `temporal-atlas bench` scores search and the brief with no model call, with 95% bootstrap intervals and a paired comparison of hybrid against keyword search. `--fixture` runs a bundled atlas (26 sessions, 69 questions in a dev and a held-out split) that gives the same scores everywhere. On your own atlas it only reads, and its report holds numbers only. `--sweep` scores similarity thresholds, and `--paraphrase` has a model reword the queries (paid, asks first, `--max-usd`). See [BENCHMARK.md](BENCHMARK.md).
 - `doctor` shows the Codex hooks and whether search by meaning is on.
 
 ### Changed
 
-- Search leaves out day, week, month and year drafts that no person edited. They repeat their sessions' text and ranked above the session with the detail. Sealed summaries and edited drafts are still searched. On the fixture this alone raised keyword MRR from 0.34 to 0.48.
+- Search leaves out day, week, month and year drafts that no person edited. They repeat their sessions' text and ranked above the session with the detail. Sealed summaries and edited drafts are still searched. On the fixture this alone raised keyword MRR from 0.47 to 0.55 (all 69 questions); with search by meaning the default reaches 0.64.
 - Search breaks score ties by note name, so the same files always give the same order.
 
 ### Upgrading from 0.3
@@ -32,7 +32,7 @@ temporal-atlas install codex     # only if you use Codex; then run /hooks in Cod
 
 ## 0.3.0
 
-Ready to share with colleagues: installs from a private GitHub repository, and the nightly run works on laptops that are shut down overnight.
+Ready to share with colleagues: installs from a private GitHub repository (0.4.0 moved to the public `pomess/temporal-atlas`), and the nightly run works on laptops that are shut down overnight.
 
 ### Changed
 

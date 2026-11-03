@@ -22,6 +22,8 @@ interface FixtureSession {
 export interface FixtureQuestion {
   query: string;
   relevant: string[];
+  /** dev: the first 33, seen while choosing the search defaults. test: written afterwards, never used to tune anything. */
+  split?: "dev" | "test";
   /** paraphrase: no distinctive word shared with the target. exact: a name or term to look up. dated: a vague query with a date range. */
   kind: "paraphrase" | "exact" | "dated";
   from?: string;
@@ -97,6 +99,56 @@ export const FIXTURE_QUESTIONS: FixtureQuestion[] = [
   { query: "dbt", relevant: ["d3"], kind: "exact" },
 
   { query: "billing changes", relevant: ["b8", "b9", "b10"], kind: "dated", from: "2026-09-28", to: "2026-10-04" },
+];
+
+/**
+ * Held-out questions, written after the search defaults were chosen and never used to tune them.
+ * Scores on this split are the ones to quote.
+ */
+const TEST_QUESTIONS: FixtureQuestion[] = [
+  { query: "billing documents timing out when customers download them", relevant: ["b1"], kind: "paraphrase" },
+  { query: "money calculations disagreeing with the accountants' books", relevant: ["b2"], kind: "paraphrase" },
+  { query: "duplicate payment notifications arriving for days", relevant: ["b3"], kind: "paraphrase" },
+  { query: "charging for part of a period when the subscription tier changes", relevant: ["b4"], kind: "paraphrase" },
+  { query: "retiring the old file download for two clients", relevant: ["b5"], kind: "paraphrase" },
+  { query: "reminder messages after a payment fails", relevant: ["b6"], kind: "paraphrase" },
+  { query: "checking EU business tax codes when the government service is offline at weekends", relevant: ["b7"], kind: "paraphrase" },
+  { query: "measuring how much each customer consumes, with history for auditors", relevant: ["b8"], kind: "paraphrase" },
+  { query: "why our bill sequence has holes in it", relevant: ["b9"], kind: "paraphrase" },
+  { query: "returning money to a client, tied back to the original bill", relevant: ["b10"], kind: "paraphrase" },
+  { query: "users stopped getting alerts after the OS upgrade until they allowed them", relevant: ["m1"], kind: "paraphrase" },
+  { query: "staff at big companies log in with their corporate identity provider", relevant: ["m2"], kind: "paraphrase" },
+  { query: "what wins when two devices change the basket while offline", relevant: ["m3"], kind: "paraphrase" },
+  { query: "layout breaking when the tablet screen is shared between two apps", relevant: ["m4"], kind: "paraphrase" },
+  { query: "store review refused the build because people could not remove their profile in the app", relevant: ["m5"], kind: "paraphrase" },
+  { query: "consistent colour variables for the night appearance", relevant: ["m6"], kind: "paraphrase" },
+  { query: "typefaces slowing down the first launch", relevant: ["m7"], kind: "paraphrase" },
+  { query: "why we stopped using our own config file for toggles", relevant: ["m8"], kind: "paraphrase" },
+  { query: "the CRM export fails when it gets too big", relevant: ["d1"], kind: "paraphrase" },
+  { query: "scrambling customer addresses at ingestion", relevant: ["d2"], kind: "paraphrase" },
+  { query: "monthly measure of customers leaving, by tier", relevant: ["d3"], kind: "paraphrase" },
+  { query: "a report that reloaded constantly burned money over two days", relevant: ["d4"], kind: "paraphrase" },
+  { query: "data has to be described up front or the pipeline rejects it", relevant: ["d5"], kind: "paraphrase" },
+  { query: "rerunning several days of data each night because phones sync late", relevant: ["d6"], kind: "paraphrase" },
+  { query: "returns counted on the day they happened instead of the sale month", relevant: ["d7"], kind: "paraphrase" },
+  { query: "erasing someone from every dataset within a month", relevant: ["d8"], kind: "paraphrase" },
+
+  { query: "SQLite", relevant: ["m3"], kind: "exact" },
+  { query: "Pixel 6", relevant: ["m7"], kind: "exact" },
+  { query: "Salesforce", relevant: ["d1"], kind: "exact" },
+  { query: "banker's rounding", relevant: ["b2"], kind: "exact" },
+  { query: "SAML", relevant: ["m2"], kind: "exact" },
+  { query: "Postgres sequences", relevant: ["b9"], kind: "exact" },
+
+  { query: "mobile work", relevant: ["m3", "m4"], kind: "dated", from: "2026-09-14", to: "2026-09-20" },
+  { query: "data platform changes", relevant: ["d1", "d2"], kind: "dated", from: "2026-09-07", to: "2026-09-13" },
+  { query: "billing", relevant: ["b4", "b5"], kind: "dated", from: "2026-09-14", to: "2026-09-20" },
+  { query: "what did we do on the app", relevant: ["m7", "m8"], kind: "dated", from: "2026-09-28", to: "2026-10-04" },
+];
+
+export const ALL_FIXTURE_QUESTIONS: FixtureQuestion[] = [
+  ...FIXTURE_QUESTIONS.map((q) => ({ ...q, split: "dev" as const })),
+  ...TEST_QUESTIONS.map((q) => ({ ...q, split: "test" as const })),
 ];
 
 /** Build the fixture atlas in `root` and return it with the note name of each session key. */

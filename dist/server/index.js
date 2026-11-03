@@ -94,7 +94,7 @@ export function createServer(session) {
         const beneath = z.children.length ? `\n\n## Beneath\n${z.children.map((c) => `- ${c.id} (${c.layer}, ${c.status}): ${c.headline}`).join("\n")}` : "";
         return `# ${z.id} (${z.layer}, ${z.status}, scope ${z.scope})\n\n${z.content}${beneath}\n\nAbove: ${z.parents.join(", ") || "none"}`;
     }, true);
-    tool("search", "Search every note this session can see, by keyword and, when the embedding model is installed, by meaning (so 'login' finds 'SSO'). Filter by scope, layer (session, day, week, month, year, topic) and date range (YYYY-MM-DD).", {
+    tool("search", "Search every note this session can see, by keyword and, when the embedding model is installed, by meaning. Describe what you are looking for in a phrase: meaning matches need a few words, while names and terms match by keyword. Filter by scope, layer (session, day, week, month, year, topic) and date range (YYYY-MM-DD).", {
         query: z.string().min(1),
         scope,
         layer: z.enum(["session", "day", "week", "month", "year", "topic"]).optional(),

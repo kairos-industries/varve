@@ -1,6 +1,6 @@
 # Temporal Atlas design (v1)
 
-Status: accepted; v0.2 implements it. v0.2 adds activity capture, the tidy command and backfill (section 18). Terms in this document are defined in [CONTEXT.md](CONTEXT.md).
+Status: accepted; 0.4 implements it. 0.2 added activity capture, the tidy command and backfill (section 18); 0.4 added Codex capture (section 10), search by meaning (section 19) and the benchmark (section 20). Terms in this document are defined in [CONTEXT.md](CONTEXT.md).
 
 ## What it is
 
@@ -8,7 +8,7 @@ Temporal Atlas is an MCP server that gives any agent (Claude Code, Codex, Cursor
 
 The atlas is a folder of plain Markdown with YAML frontmatter and `[[wikilinks]]`. It opens directly in Obsidian, works in git, and needs no database.
 
-The server never calls a model. The connected agent writes summaries ([ADR 0001](docs/adr/0001-the-agent-writes-every-summary.md)), or the `tidy` command does when the user runs or schedules it ([ADR 0004](docs/adr/0004-tidy-may-call-a-model-when-the-user-schedules-it.md)).
+The server never calls a model. The connected agent writes summaries ([ADR 0001](adr/0001-the-agent-writes-every-summary.md)), or the `tidy` command does when the user runs or schedules it ([ADR 0004](adr/0004-tidy-may-call-a-model-when-the-user-schedules-it.md)).
 
 ## 1. Folder layout
 
@@ -41,7 +41,7 @@ The atlas root is `$TEMPORAL_ATLAS_DIR`, defaulting to `~/TemporalAtlas`.
 
 Week files use the ISO week-numbering year, so 2025-12-29 belongs to `2026-W01`.
 
-The Markdown files are the source of truth ([ADR 0002](docs/adr/0002-markdown-files-are-the-source-of-truth.md)). The search index lives in memory and is rebuilt from the files when the server starts.
+The Markdown files are the source of truth ([ADR 0002](adr/0002-markdown-files-are-the-source-of-truth.md)). The search index lives in memory and is rebuilt from the files when the server starts.
 
 ### Frontmatter
 
@@ -73,7 +73,7 @@ atlas_hash: 9c1e...    # hash of the body as the server last wrote it
 | Month | `2026-10` | 1st of next month 04:00 | that month's sealed day notes | ~400 |
 | Year | `2026` | 1 Jan 04:00 | that year's sealed month notes | ~800 |
 
-Weeks and months are both built from day notes because ISO weeks cross month boundaries, so a month cannot be assembled from whole weeks ([ADR 0003](docs/adr/0003-weeks-and-months-both-roll-up-from-days.md)). A month of about 20 worked days is roughly 12k tokens of input, which fits under the default cost gate.
+Weeks and months are both built from day notes because ISO weeks cross month boundaries, so a month cannot be assembled from whole weeks ([ADR 0003](adr/0003-weeks-and-months-both-roll-up-from-days.md)). A month of about 20 worked days is roughly 12k tokens of input, which fits under the default cost gate.
 
 The server rejects a `seal` whose content exceeds 150% of the length target and returns the target in the error.
 
@@ -440,9 +440,10 @@ A note is embedded in pieces: paragraphs and list items, merged up to about 60 w
 
 ## 20. Benchmark
 
-`temporal-atlas bench` (BENCHMARK.md) scores search (hit@1, hit@5, MRR, in keyword, meaning and both modes) and the brief (tokens, build time, share of recent todos shown). It calls no model and only reads the atlas; its report holds numbers only (ADR 0007).
+`temporal-atlas bench` ([BENCHMARK.md](../BENCHMARK.md)) scores search (hit@1, hit@5, MRR, in keyword, meaning and both modes) and the brief (tokens, build time, share of recent todos shown). It calls no model and only reads the atlas; its report holds numbers only (ADR 0007).
 
-- `--fixture` builds `src/bench/fixture.ts` (26 invented sessions, 33 questions) in a temporary folder with fixed session ids, so the scores are the same everywhere.
+- `--fixture` builds `src/bench/fixture.ts` (26 invented sessions, 69 questions: 33 dev, seen while choosing the defaults, and 36 held out) in a temporary folder with fixed session ids, so the scores are the same everywhere.
+- Every score has a 95% bootstrap interval (fixed seed), and hybrid is compared with keyword search probe by probe.
 - Without it, probes come from the user's atlas: logged decisions, findings and changes (known-item search, each in its own scope), and sealed day and week headlines (to find their sources).
 - `--sweep` scores hybrid search at thresholds 0.20 to 0.45, so the default can be chosen from real atlases.
 - `--paraphrase` has a model reword the probe queries, through the user's `claude` CLI, after asking, within `--max-usd`.

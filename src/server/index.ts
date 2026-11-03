@@ -153,7 +153,7 @@ export function createServer(session: AtlasSession): McpServer {
 
   tool(
     "search",
-    "Search every note this session can see, by keyword and, when the embedding model is installed, by meaning (so 'login' finds 'SSO'). Filter by scope, layer (session, day, week, month, year, topic) and date range (YYYY-MM-DD).",
+    "Search every note this session can see, by keyword and, when the embedding model is installed, by meaning. Describe what you are looking for in a phrase: meaning matches need a few words, while names and terms match by keyword. Filter by scope, layer (session, day, week, month, year, topic) and date range (YYYY-MM-DD).",
     {
       query: z.string().min(1),
       scope,

@@ -38,7 +38,7 @@ export function normalizeRemote(url) {
         .toLowerCase();
 }
 /**
- * Pick the scope for a working directory, following the order in DESIGN.md section 3.
+ * Pick the scope for a working directory, following the order in docs/DESIGN.md section 3.
  * Folders inside `generalPaths` (app scratch folders and the like) go to the general scope.
  */
 export function detectScope(cwd, file, generalPaths = []) {

@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { benchFixture, benchOwn, eventQuery, ownProbes, paraphrase } from "../src/bench/index.js";
-import { FIXTURE_QUESTIONS, FIXTURE_SESSIONS } from "../src/bench/fixture.js";
+import { benchFixture, benchOwn, bootstrap, eventQuery, ownProbes, paraphrase } from "../src/bench/index.js";
+import { ALL_FIXTURE_QUESTIONS, FIXTURE_SESSIONS } from "../src/bench/fixture.js";
 import { allScopes } from "../src/periods.js";
 import { listMarkdown } from "../src/store/note.js";
 import type { ModelRunner } from "../src/tidy/index.js";
@@ -34,9 +34,10 @@ describe("benchmark", () => {
     const r = benchFixture(undefined);
     expect(r.dataset).toBe("fixture");
     expect(r.atlas.sessions).toBe(FIXTURE_SESSIONS.length);
-    expect(r.retrieval.all!.probes).toBe(FIXTURE_QUESTIONS.length);
+    expect(r.retrieval.all!.probes).toBe(ALL_FIXTURE_QUESTIONS.length);
+    expect(r.retrieval.dev!.probes + r.retrieval.test!.probes).toBe(ALL_FIXTURE_QUESTIONS.length);
     // Exact names are found first: day, week and month drafts must not crowd out the session.
-    expect(r.retrieval.exact!.keyword!.hit1).toBe(1);
+    expect(r.retrieval["dev/exact"]!.keyword!.hit1).toBe(1);
     expect(r.model).toBeNull();
     expect(r.retrieval.all!.hybrid).toBeUndefined();
     expect(withoutMs(benchFixture(undefined).retrieval)).toEqual(withoutMs(r.retrieval));
@@ -67,6 +68,15 @@ describe("benchmark", () => {
     const before = files();
     benchOwn(t.atlas);
     expect(files()).toEqual(before);
+  });
+
+  it("gives the same bootstrap interval on every run, around the mean", () => {
+    const values = [0, 1, 0.5, 1, 0, 0.25, 1, 1, 0, 0.33];
+    const ci = bootstrap(values);
+    expect(bootstrap(values)).toEqual(ci);
+    expect(ci[0]).toBeLessThan(0.508);
+    expect(ci[1]).toBeGreaterThan(0.508);
+    expect(bootstrap([1, 1, 1])).toEqual([1, 1]);
   });
 
   it("cuts an event to a query someone might type", () => {
