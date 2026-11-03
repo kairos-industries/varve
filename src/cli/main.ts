@@ -7,6 +7,8 @@ import { CONFIG_FILE, DEFAULT_CONFIG, INIT_KEYS } from "../config.js";
 import { atlasDir, runStdio } from "../server/index.js";
 import { VERSION } from "../version.js";
 import { MODEL, modelDir, modelInstalled, pullModel } from "../embed/index.js";
+import { benchFixture, benchOwn, formatReport, ownProbes, paraphrase, paraphraseTokens } from "../bench/index.js";
+import { allScopes } from "../periods.js";
 import { claudeRunner, tidy, tidyPlan } from "../tidy/index.js";
 import { backfill, formatBackfill } from "./backfill.js";
 import { doctor, formatDoctor } from "./doctor.js";
@@ -43,6 +45,15 @@ Usage:
                                         --prune              delete headless runs instead of marking them skipped
   temporal-atlas models pull          Download the search model (${MODEL.name}, about 30 MB, once) so search matches by meaning
   temporal-atlas models status        Show whether the search model is installed
+  temporal-atlas bench                How well search and the brief bring back past work, on your atlas (read only, no model)
+                                        --fixture            on the bundled example atlas instead, the same for everyone
+                                        --json               print the report as JSON
+                                        --out <file>         where to save the report (default .atlas/bench/)
+                                        --max <n>            at most this many probes from your atlas (default 200)
+                                        --sweep              also score search at several similarity thresholds
+                                        --paraphrase         have a model reword the queries first (paid; asks first)
+                                          --model <name>       default haiku
+                                          --max-usd <amount>   default 0.25
   temporal-atlas doctor               Check the atlas: backlog, unrecorded sessions, hooks, broken notes
   temporal-atlas hook <event>         Used by the hooks: session-start, stop or session-end, payload on stdin (--client codex for Codex)
 
@@ -128,6 +139,48 @@ async function runTidy(args: string[]) {
   if (sealed || report.spentUsd > 0) ran(`sealed ${sealed}, failed ${failed}, $${report.spentUsd.toFixed(3)}`);
 }
 
+async function runBench(args: string[]) {
+  const json = flag(args, "--json");
+  const show = (r: Parameters<typeof formatReport>[0]) => console.log(json ? JSON.stringify(r, null, 2) : formatReport(r));
+  const save = (r: object, fallbackDir: string) => {
+    const out = option(args, "--out") ?? join(fallbackDir, `bench-${new Date().toISOString().slice(0, 10)}.json`);
+    mkdirSync(join(out, ".."), { recursive: true });
+    writeFileSync(out, `${JSON.stringify(r, null, 2)}\n`);
+    if (!json) console.log(`\nReport saved to ${out}. It holds numbers only: no note text, no project names.`);
+  };
+  if (flag(args, "--fixture")) {
+    const r = benchFixture(undefined, { sweep: flag(args, "--sweep") });
+    show(r);
+    if (option(args, "--out")) save(r, ".");
+    return;
+  }
+  const atlas = new Atlas({ dir: atlasDir() });
+  const reportDir = join(atlas.paths.stateDir, "bench");
+  const max = number(args, "--max", 200);
+  if (!flag(args, "--paraphrase")) {
+    const r = benchOwn(atlas, { max, sweep: flag(args, "--sweep") });
+    show(r);
+    save(r, reportDir);
+    return;
+  }
+  const probes = ownProbes(atlas, allScopes(atlas), max);
+  const model = option(args, "--model") ?? "haiku";
+  const maxUsd = number(args, "--max-usd", 0.25);
+  console.log(`Paraphrasing ${probes.length} queries with ${model} through \`${atlas.config.tidy.command} -p\`: about ${paraphraseTokens(probes)} input tokens, stopped at $${maxUsd.toFixed(2)}.`);
+  console.log("Only the queries are sent (one clause of a logged event, or a summary headline), through your own Claude Code sign-in.");
+  if (!flag(args, "--yes")) {
+    if (!process.stdin.isTTY) throw new Error("Pass --yes to run the paraphrase tier without asking.");
+    if (!(await confirm("Run it? [y/N] "))) {
+      console.log("Nothing sent.");
+      return;
+    }
+  }
+  const rewritten = await paraphrase(probes, claudeRunner(atlas), { model, maxUsd });
+  const r = { ...benchOwn(atlas, { probes: rewritten.probes, dataset: "own-paraphrased", sweep: flag(args, "--sweep") }), paraphrase: { model, costUsd: rewritten.costUsd, rewritten: rewritten.probes.length } };
+  show(r);
+  save(r, reportDir);
+}
+
 function init(dir: string) {
   mkdirSync(join(dir, ".atlas"), { recursive: true });
   const config = join(dir, CONFIG_FILE);
@@ -205,6 +258,8 @@ async function main(argv: string[]) {
     }
     case "tidy":
       return runTidy(rest);
+    case "bench":
+      return runBench(rest);
     case "backfill":
       console.log(formatBackfill(backfill(new Atlas({ dir: atlasDir() }), { dryRun: flag(rest, "--dry-run"), prune: flag(rest, "--prune") })));
       return;

@@ -24,6 +24,8 @@ export interface AtlasOptions {
   dir: string;
   clock?: Clock;
   config?: Partial<AtlasConfig>;
+  /** New session ids; random unless given (the benchmark fixture needs the same names on every run). */
+  sessionIds?: () => string;
 }
 
 export interface RegistryEntry {
@@ -47,11 +49,13 @@ export class Atlas {
   readonly paths: AtlasPaths;
   readonly config: AtlasConfig;
   readonly clock: Clock;
+  readonly newSessionId: () => string;
 
   constructor(opts: AtlasOptions) {
     this.paths = new AtlasPaths(opts.dir);
     this.config = loadConfig(opts.dir, opts.config);
     this.clock = opts.clock ?? systemClock;
+    this.newSessionId = opts.sessionIds ?? newSessionId;
   }
 
   get root(): string {
@@ -173,7 +177,7 @@ export class Atlas {
       const prev = reg[input.sessionId];
       reg[input.sessionId] = {
         ...prev,
-        id: prev?.id ?? known?.id ?? newSessionId(),
+        id: prev?.id ?? known?.id ?? this.newSessionId(),
         path: prev?.path ?? known?.path,
         scope: prev?.scope ?? scope,
         cwd: input.cwd ?? prev?.cwd,
@@ -198,7 +202,7 @@ export class Atlas {
       const prev = reg[input.sessionId];
       reg[input.sessionId] = {
         ...prev,
-        id: prev?.id ?? known?.id ?? newSessionId(),
+        id: prev?.id ?? known?.id ?? this.newSessionId(),
         path: prev?.path ?? known?.path,
         scope: prev?.scope ?? known?.scope ?? this.detect(input.cwd).scope,
         cwd: prev?.cwd ?? input.cwd,
@@ -439,7 +443,7 @@ export class AtlasSession {
     this.client = opts.client;
     this.key = opts.clientSessionId ?? `mcp-${randomBytes(6).toString("hex")}`;
     const fromHook = opts.clientSessionId ? atlas.readRegistry()[opts.clientSessionId] : undefined;
-    this.id = fromHook?.id ?? newSessionId();
+    this.id = fromHook?.id ?? atlas.newSessionId();
     this.cwd = opts.cwd ?? fromHook?.cwd;
     this.transcript = opts.transcript ?? fromHook?.transcript;
     const det = atlas.detect(this.cwd);

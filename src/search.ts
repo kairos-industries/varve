@@ -2,7 +2,7 @@ import MiniSearch from "minisearch";
 import { statSync } from "node:fs";
 import type { Atlas } from "./atlas.js";
 import { cosine, type Embedder, embedder as installedEmbedder } from "./embed/index.js";
-import { listMarkdown, noteName, readNote } from "./store/note.js";
+import { isHumanEdited, listMarkdown, noteName, readNote } from "./store/note.js";
 import { rangeOf } from "./time/index.js";
 
 export interface SearchInput {
@@ -21,6 +21,8 @@ export interface SearchOptions {
   mode?: SearchMode;
   /** Defaults to the installed model; tests and the benchmark pass their own. */
   embedder?: Embedder;
+  /** Defaults to MIN_SIMILARITY; the benchmark sweeps it. */
+  minSimilarity?: number;
 }
 
 export interface SearchResult {
@@ -61,6 +63,9 @@ function toDoc(path: string): Doc | undefined {
     first = days[0] ?? String(fm.started ?? "").slice(0, 10);
     last = days.at(-1) ?? first;
   } else if (fm.atlas === "period") {
+    // A draft is assembled from the notes beneath it, so it would only repeat their matches
+    // above them. Sealed summaries and drafts a person wrote in are searched.
+    if (fm.status === "draft" && !fm.human_edited && !isHumanEdited(note)) return undefined;
     layer = String(fm.layer);
     period = String(fm.period);
     ({ first, last } = rangeOf(period));
@@ -180,7 +185,7 @@ export function search(atlas: Atlas, input: SearchInput, opts: SearchOptions = {
           }
           return { id: d.id, ...best };
         })
-        .filter((r) => r.sim >= MIN_SIMILARITY)
+        .filter((r) => r.sim >= (opts.minSimilarity ?? MIN_SIMILARITY))
         .sort((a, b) => b.sim - a.sim)
         .slice(0, SEMANTIC_DEPTH)
         .forEach((r, rank) => {
@@ -189,8 +194,9 @@ export function search(atlas: Atlas, input: SearchInput, opts: SearchOptions = {
     }
   }
 
+  // Ties go to the note name, so the same files always give the same order.
   return [...fused.entries()]
-    .sort((a, b) => b[1].score - a[1].score)
+    .sort((a, b) => b[1].score - a[1].score || byId.get(a[0])!.name.localeCompare(byId.get(b[0])!.name))
     .slice(0, input.limit ?? 10)
     .map(([id, e]) => {
       const d = byId.get(id)!;
