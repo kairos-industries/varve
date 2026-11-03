@@ -1,15 +1,15 @@
 # Benchmark
 
-`temporal-atlas bench` measures how well Temporal Atlas brings back past work: whether search finds the note that answers a question, and whether the brief shows what is still open. It calls no model and only reads the atlas.
+`varve bench` measures how well Varve brings back past work: whether search finds the note that answers a question, and whether the brief shows what is still open. It calls no model and only reads the atlas.
 
 The numbers below are the baseline. Each report sent in adds a real atlas, and the defaults (search threshold, what goes in the brief) will be chosen from those reports.
 
 ## Run it
 
 ```sh
-temporal-atlas models pull          # once, so search by meaning is scored too
-temporal-atlas bench --fixture      # the bundled atlas: the same on every machine
-temporal-atlas bench --sweep        # your own atlas, with the similarity threshold sweep
+varve models pull          # once, so search by meaning is scored too
+varve bench --fixture      # the bundled atlas: the same on every machine
+varve bench --sweep        # your own atlas, with the similarity threshold sweep
 ```
 
 `bench` on your own atlas saves its report to `.atlas/bench/bench-<date>.json` in the atlas folder. The report holds numbers only: the version, platform, Node version, model id, counts of scopes, sessions and notes, and the scores. It never contains note text, project names or note names, and a test fails if it ever does (`test/bench.test.ts`).
@@ -48,7 +48,7 @@ Every score comes with a 95% bootstrap interval (2,000 resamples, fixed seed, so
 - **exact** questions look up a name or term (`VIES`, `LaunchDarkly`, `guideline 5.1.1`).
 - **dated** questions are vague queries with a date range.
 
-The dev paraphrases avoid every distinctive word of their target note. The test paraphrases were written later and less strictly, and share more words with their notes: keyword search finds 81% of them in the top five, against 39% of the dev ones. Both splits are in [src/bench/fixture.ts](src/bench/fixture.ts).
+The dev paraphrases avoid every distinctive word of their target note. The test paraphrases were written later and less strictly, and share more words with their notes: keyword search finds 81% of them in the top five, against 39% of the dev ones. Both splits are in [src/bench/fixture.ts](../src/bench/fixture.ts).
 
 **Your atlas.** Probes come from what is already there:
 
@@ -61,7 +61,7 @@ At most 200 probes are used (`--max`), sampled across the whole atlas.
 
 ## Results
 
-The reports behind these tables are in [docs/benchmark/](docs/benchmark/). The README figures are drawn from them by `npm run charts`.
+The reports behind these tables are in [docs/benchmark/](benchmark/). The README figures are drawn from them by `npm run charts`.
 
 ### Fixture
 
@@ -107,7 +107,7 @@ Threshold sweep, hybrid, all 69 questions:
 
 0.20 scores best here, but the fixture has only 26 sessions. On a large atlas a low threshold lets weak matches by meaning into nearly every result list, a cost the fixture can't show. The default stays at 0.35 until sweeps from real atlases say otherwise.
 
-Brief: 195 tokens on average. Todos from the last 14 days shown: **0 of 3**.
+Brief, 0.4.0: 195 tokens on average; todos from the last 14 days shown: **0 of 3**. 0.5.0 adds the Open section: 216 tokens on average, **3 of 3** shown. Search scores are the same in 0.5.0 ([fixture-0.5.0.json](benchmark/fixture-0.5.0.json)).
 
 ### The author's atlas
 
@@ -121,7 +121,7 @@ Brief: 195 tokens on average. Todos from the last 14 days shown: **0 of 3**.
 
 As expected for known-item probes, keyword search is near the ceiling, and fusing in matches by meaning costs a little. The threshold sweep moves MRR by no more than 0.01 between 0.20 and 0.45.
 
-Brief: 901 tokens on average across 9 scopes with recent work, 1,423 at most, built in 5 ms. Todos from the last 14 days shown: **0 of 4**.
+Brief, 0.4.0: 901 tokens on average across 9 scopes with recent work, 1,423 at most, built in 5 ms; todos from the last 14 days shown: **0 of 4**. 0.5.0: 939 tokens on average, **4 of 4** shown ([author-0.5.0.json](benchmark/author-0.5.0.json)).
 
 ## What the results say so far
 
@@ -130,7 +130,7 @@ Brief: 901 tokens on average across 9 scopes with recent work, 1,423 at most, bu
 1. **Fusing meaning with keyword search helps where people paraphrase**, and the gain holds on the held-out questions (+0.10 MRR, interval 0.01 to 0.22). The intervals are wide because the fixture is small.
 2. **Meaning alone is worse than keyword alone** on every split, so it is only used fused.
 3. **On known-item search, fusing costs a little** (0.94 to 0.92 on the author's atlas). The paraphrased tier on real atlases will show whether the trade holds when people ask in their own words.
-4. **The brief drops open todos.** It shows the open threads of the last session only, so a todo logged three sessions ago disappears. Both datasets score 0%. This is the next thing to fix.
+4. **The brief dropped open todos, and 0.5.0 fixes it.** 0.4.0 showed the open threads of the last session only, so a todo logged three sessions ago disappeared (0% on both datasets). 0.5.0 shows open items from topics and todos from days no rollup has read yet (100% on both, for 20 to 40 more tokens). This check only covers todos on days not yet rolled up; whether rollups carry the still-open ones into topics needs questions about sealed periods, which the fixture does not have yet.
 5. **The model is small.** potion-base-8M runs in plain TypeScript with no native code and no download at search time. A larger model would likely do better on paraphrases, and a report comparing models is welcome.
 
 ## Limits of the method

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0
+
+Temporal Atlas is now **Varve**, and topic notes hold dated claims and open items, so the atlas is organized by topic as well as by time.
+
+### Added
+
+- **Claims, open items and history in topics.** Each line in a topic note has the day it started, the note it came from and an Obsidian block id. A replaced or closed claim, and a resolved item, moves to History with the day it ended; nothing is deleted. `seal`'s `topic_updates` and `topic` updates take `claims` (with `replaces`), `close`, `open` and `resolve`, and the server checks every id and day before writing. Rollup writers see the scope's current claims and open items with their ids. `tidy` reads them from a fenced `topics` block at the end of the reply, and skips a bad block with a warning instead of failing the rollup. See ADR 0010.
+- **Open and Changed this week in the brief.** Open lists open items from topics and todos from the last 14 days that no rollup has read yet. On the benchmark, the share of recent todos the brief shows goes from 0% to 100% on the fixture and on the author's atlas, for about 20 to 40 more tokens.
+
+### Changed
+
+- **Renamed to Varve** (ADR 0009): the CLI, MCP server name, environment variables (`VARVE_DIR`, `VARVE_MODELS`), default folder (`~/Varve`), model cache and repository (`pomess/varve`). The `temporal-atlas` command, `TEMPORAL_ATLAS_*` variables, an existing `~/TemporalAtlas` folder and a model in the old cache keep working. `setup` replaces an MCP registration and a nightly job under the old name. The on-disk format is unchanged.
+
+### Upgrading from 0.4
+
+```sh
+npm install -g github:pomess/varve
+varve setup      # registers the server as varve and rewrites the hooks; your notes stay where they are
+```
+
 ## 0.4.0
 
 Open source, at `pomess/temporal-atlas`. Codex sessions are recorded like Claude Code ones, search matches by meaning, and a benchmark measures how well the atlas brings back past work.

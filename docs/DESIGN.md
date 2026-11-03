@@ -1,10 +1,10 @@
-# Temporal Atlas design (v1)
+# Varve design (v1)
 
 Status: accepted; 0.4 implements it. 0.2 added activity capture, the tidy command and backfill (section 18); 0.4 added Codex capture (section 10), search by meaning (section 19) and the benchmark (section 20). Terms in this document are defined in [CONTEXT.md](CONTEXT.md).
 
 ## What it is
 
-Temporal Atlas is an MCP server that gives any agent (Claude Code, Codex, Cursor, Windsurf, VS Code Copilot) a memory of past work. It records sessions as they happen and summarizes them into day, week, month and year notes, each layer shorter than the one below. At the start of a session the agent receives a brief of recent work in its scope and can zoom into any period or search the whole atlas.
+Varve is an MCP server that gives any agent (Claude Code, Codex, Cursor, Windsurf, VS Code Copilot) a memory of past work. It records sessions as they happen and summarizes them into day, week, month and year notes, each layer shorter than the one below. At the start of a session the agent receives a brief of recent work in its scope and can zoom into any period or search the whole atlas.
 
 The atlas is a folder of plain Markdown with YAML frontmatter and `[[wikilinks]]`. It opens directly in Obsidian, works in git, and needs no database.
 
@@ -12,7 +12,7 @@ The server never calls a model. The connected agent writes summaries ([ADR 0001]
 
 ## 1. Folder layout
 
-The atlas root is `$TEMPORAL_ATLAS_DIR`, defaulting to `~/TemporalAtlas`.
+The atlas root is `$VARVE_DIR`, defaulting to `~/Varve`.
 
 ```
 <atlas>/
@@ -51,9 +51,9 @@ Every note the server writes carries:
 atlas: period          # session | period | index | topic
 layer: day             # session | day | week | month | year (absent on topics)
 period: 2026-10-08
-scope: temporal-atlas
+scope: varve
 status: sealed         # open | closed (sessions); draft | sealed | stale (periods)
-headline: "Designed the time model and tool list for Temporal Atlas"
+headline: "Designed the time model and tool list for Varve"
 sources: ["[[2026-10-08T1432-k3f9q2]]", "[[2026-10-08T1910-p0x2aa]]"]
 sealed_at: 2026-10-09T09:12:00+02:00
 atlas_hash: 9c1e...    # hash of the body as the server last wrote it
@@ -156,7 +156,7 @@ Codex rollouts (`~/.codex/sessions/.../rollout-*.jsonl`) are read into the same 
 
 A conversation that is reopened or resumed keeps the same Claude Code session id and transcript, and keeps writing to the same note. If more activity lands on a day that is already sealed, the day becomes stale.
 
-The hooks skip sessions in `capture.ignorePaths`, headless sessions (every prompt marked `turnOrigin: sdk` in the transcript) unless `capture.headless` is on, and the `claude -p` runs started by `tidy` (`TEMPORAL_ATLAS_CHILD=1`).
+The hooks skip sessions in `capture.ignorePaths`, headless sessions (every prompt marked `turnOrigin: sdk` in the transcript) unless `capture.headless` is on, and the `claude -p` runs started by `tidy` (`VARVE_CHILD=1`).
 
 ### Transcripts
 
@@ -201,7 +201,7 @@ The server estimates each rollup's input tokens as source characters divided by 
 
 ### Tidy
 
-`temporal-atlas tidy` writes pending rollups without an agent session. It works through the same pending list in the same order, one `claude -p` call per rollup:
+`varve tidy` writes pending rollups without an agent session. It works through the same pending list in the same order, one `claude -p` call per rollup:
 
 ```
 claude -p --model <tidy.model> --output-format json --no-session-persistence \
@@ -213,7 +213,7 @@ The child has no tools, no MCP servers, no user hooks and saves no transcript. T
 
 A run stops before a rollup whose input estimate plus length target would pass `tidy.maxTokens`, and once `tidy.maxUsd` is spent as `claude` reports it. Orphan sessions are left out unless `--orphans` is passed. Each rollup is appended to `.atlas/tidy.log` with its tokens and cost.
 
-`temporal-atlas install nightly` schedules `tidy --scheduled` at `tidy.at` (04:30 by default) with launchd on macOS, and prints a crontab line on Linux and a Task Scheduler command on Windows. The job also runs at login and every hour, because launchd does not run a calendar job that was missed while the computer was off (it only catches up after sleep), and laptops are often off at 04:30. `--scheduled` makes the extra runs cheap: it writes rollups at most once per atlas day, recorded in `.atlas/nightly.json`. A run that never reached the model (offline, signed out) is not recorded, so the next hour tries again. `doctor` warns when the schedule has never run or has not run for 36 hours. It sets `"rollups": "nightly"`: the server instructions, the brief and `close_session` then tell the agent the nightly run does rollups, and the day-change checkpoint stops listing them.
+`varve install nightly` schedules `tidy --scheduled` at `tidy.at` (04:30 by default) with launchd on macOS, and prints a crontab line on Linux and a Task Scheduler command on Windows. The job also runs at login and every hour, because launchd does not run a calendar job that was missed while the computer was off (it only catches up after sleep), and laptops are often off at 04:30. `--scheduled` makes the extra runs cheap: it writes rollups at most once per atlas day, recorded in `.atlas/nightly.json`. A run that never reached the model (offline, signed out) is not recorded, so the next hour tries again. `doctor` warns when the schedule has never run or has not run for 36 hours. It sets `"rollups": "nightly"`: the server instructions, the brief and `close_session` then tell the agent the nightly run does rollups, and the day-change checkpoint stops listing them.
 
 ### Sealing
 
@@ -256,19 +256,42 @@ When a client connects, the server builds the brief for the detected scope and r
 
 ## 7. Topics
 
-Topics live in `scopes/<scope>/topics/`. A topic note has:
+Topics live in `scopes/<scope>/topics/`. The time layers answer "what happened, and when"; topics cut across them and answer "what do we know about X, since when, and what is still open" (ADR 0010). A topic note has:
 
 ```markdown
 ## What we know now
-<current state, rewritten when it changes>
+<optional prose a person or agent wrote>
+- Enterprise users sign in through Okta with SAML. (since 2026-09-09, [[2026-09-09 billing-api]]) ^c1jbzav
+
+## Open
+- Decide the session lifetime for SAML users. (open since 2026-09-09, [[2026-09-09 billing-api]]) ^oe5vw95
+
+## History
+- ~~Everyone signs in with magic links.~~ (since 2026-09-01, until 2026-09-09, replaced by ^c1jbzav) ^cdise4w
 
 ## Timeline
 - 2026-10-08 Chose 04:00 as the day boundary. [[2026-10-08]]
 ```
 
-`topic(name, update?)` reads a topic or creates or updates it. Before creating one, the server compares the name with existing topics in the scope (normalized names, word overlap and edit distance). If any are close, it returns them and creates the new topic only when called with `force: true`.
+A **claim** holds from its day on; an **open item** is still to do or decide. Each ends in an Obsidian block id, derived from the topic, the text and the day, so it is the same on every machine and other notes can link it (`[[Auth design#^c1jbzav]]`). Nothing is deleted: a claim that is replaced or closed, and an item that is resolved, moves to History with the day it ended. Lines a person wrote in these sections without the format are kept as they are.
 
-Rollups can propose topic changes in `seal` through `topic_updates`. Each update appends a timeline entry linking to the sealed period note and can replace "What we know now."
+Operations, in `topic` updates and in `seal`'s `topic_updates`:
+
+| Field | Does |
+|---|---|
+| `claims: [{text, replaces?, since?}]` | adds claims; `replaces` names the current claim it supersedes |
+| `close: [id]` | ends claims with nothing replacing them |
+| `open: [text]` | adds open items |
+| `resolve: [{id, how?}]` | ends open items |
+| `state`, `entry` | prose under "What we know now", and a timeline line, as before |
+
+Every operation is checked before anything is written: ids must name a current claim or open item, days must be YYYY-MM-DD, not in the future, and, for a rollup, inside its period. One bad operation refuses the whole call. A rollup's lines default to the period's last day and cite the period note; a `topic` call during a session is dated today and cites the session.
+
+The writer of a day, week, month or year rollup gets the scope's current claims and open items with their ids under "Topics in this scope" (at most about 1,500 tokens) and instructions on when to add, replace, close, open and resolve. `tidy` asks for the same changes as a fenced `topics` JSON block at the end of the reply; if the block does not parse or does not check, the summary is still sealed and the topic changes are skipped with a warning in `tidy.log`.
+
+The brief shows an **Open** section (open items from topics, and todos logged in the last 14 days on days no rollup has sealed yet, newest first) and a **Changed this week** section (claims that started this week, and claims and items that ended).
+
+`topic(name, update?)` reads a topic or creates or updates it. Before creating one, the server compares the name with existing topics in the scope (normalized names, word overlap and edit distance). If any are close, it returns them and creates the new topic only when called with `force: true`.
 
 Topics in `general` are visible from every scope. Topics in an isolated scope follow that scope's visibility.
 
@@ -302,17 +325,17 @@ The server uses only tools, no MCP resources or prompts, so it behaves the same 
 
 ## 10. Claude Code and Codex adapters
 
-`temporal-atlas install claude-code` adds three hooks to `~/.claude/settings.json`. It prints the exact change and asks before writing.
+`varve install claude-code` adds three hooks to `~/.claude/settings.json`. It prints the exact change and asks before writing.
 
-- `SessionStart` runs `temporal-atlas hook session-start`, which records the session id, working directory and transcript path in `.atlas/sessions.json`, reusing the note of an earlier start of the same conversation.
-- `Stop` runs `temporal-atlas hook stop` after every turn, which updates the session's activity (section 4).
-- `SessionEnd` runs `temporal-atlas hook session-end`, which reads the last turn and closes the session.
+- `SessionStart` runs `varve hook session-start`, which records the session id, working directory and transcript path in `.atlas/sessions.json`, reusing the note of an earlier start of the same conversation.
+- `Stop` runs `varve hook stop` after every turn, which updates the session's activity (section 4).
+- `SessionEnd` runs `varve hook session-end`, which reads the last turn and closes the session.
 
-Each hook runs `node "<path to dist/cli/main.js>" --dir "<atlas folder>" hook <event>`. The folder goes in `--dir` rather than a `TEMPORAL_ATLAS_DIR=` prefix, which cmd and PowerShell cannot read, and paths use forward slashes on Windows.
+Each hook runs `node "<path to dist/cli/main.js>" --dir "<atlas folder>" hook <event>`. The folder goes in `--dir` rather than a `VARVE_DIR=` prefix, which cmd and PowerShell cannot read, and paths use forward slashes on Windows.
 
 A hook never fails the agent: errors go to stderr and the hook exits 0.
 
-`temporal-atlas install codex` (and `setup`, when `~/.codex` exists) adds the same three hooks to `~/.codex/hooks.json`, each with `--client codex`. Codex sends the same payload fields (`session_id`, `cwd`, `transcript_path`). Its `SessionEnd` hooks may run for 3 seconds at most, so that one has a 3-second timeout. Codex runs a new hook only after the user trusts it with `/hooks`.
+`varve install codex` (and `setup`, when `~/.codex` exists) adds the same three hooks to `~/.codex/hooks.json`, each with `--client codex`. Codex sends the same payload fields (`session_id`, `cwd`, `transcript_path`). Its `SessionEnd` hooks may run for 3 seconds at most, so that one has a 3-second timeout. Codex runs a new hook only after the user trusts it with `/hooks`.
 
 Codex starts its MCP servers without telling them which conversation they serve. When an MCP session has no client session id, it joins the Codex hook session that started in the same folder within five minutes and that no other MCP session has joined (`joined` in the registry). From then on it writes to that session's note, so events and activity sit together. Two Codex conversations started at the same time in one folder can be paired the wrong way round.
 
@@ -320,14 +343,14 @@ Codex starts its MCP servers without telling them which conversation they serve.
 
 | Command | Does |
 |---|---|
-| `temporal-atlas` | runs the MCP server over stdio |
-| `temporal-atlas init [dir]` | creates the atlas folder and config |
-| `temporal-atlas install claude-code` | installs the hooks (asks first) |
-| `temporal-atlas install nightly` | schedules `tidy --scheduled`, catching up after the computer was off (asks first; `--at`, `--remove`) |
-| `temporal-atlas tidy` | writes pending rollups with `claude -p` within a budget (`--dry-run`, `--yes`, `--scope`, `--model`, `--max-tokens`, `--max-usd`, `--orphans`) |
-| `temporal-atlas backfill` | records older sessions from their transcripts, without a model (`--dry-run`, `--prune`) |
-| `temporal-atlas doctor` | checks the atlas: backlog, unrecorded sessions, hook version, broken links, stale notes, frontmatter errors |
-| `temporal-atlas hook <event>` | internal, called by the hooks: `session-start`, `stop`, `session-end` |
+| `varve` | runs the MCP server over stdio |
+| `varve init [dir]` | creates the atlas folder and config |
+| `varve install claude-code` | installs the hooks (asks first) |
+| `varve install nightly` | schedules `tidy --scheduled`, catching up after the computer was off (asks first; `--at`, `--remove`) |
+| `varve tidy` | writes pending rollups with `claude -p` within a budget (`--dry-run`, `--yes`, `--scope`, `--model`, `--max-tokens`, `--max-usd`, `--orphans`) |
+| `varve backfill` | records older sessions from their transcripts, without a model (`--dry-run`, `--prune`) |
+| `varve doctor` | checks the atlas: backlog, unrecorded sessions, hook version, broken links, stale notes, frontmatter errors |
+| `varve hook <event>` | internal, called by the hooks: `session-start`, `stop`, `session-end` |
 
 ## 12. Configuration
 
@@ -351,11 +374,11 @@ Codex starts its MCP servers without telling them which conversation they serve.
 }
 ```
 
-`TEMPORAL_ATLAS_DIR` sets the atlas location. Scope detection checks `capture.generalPaths` after the saved rules: a session in one of those folders goes to `general`.
+`VARVE_DIR` sets the atlas location. Scope detection checks `capture.generalPaths` after the saved rules: a session in one of those folders goes to `general`.
 
 ## 13. Implementation
 
-TypeScript on Node 20 or later. It is installed from the GitHub repository (`npm install -g github:pomess/temporal-atlas`), not from npm: the package is marked private, and the compiled `dist/` is committed so installing needs no build step. CI checks that `dist/` matches the source.
+TypeScript on Node 20 or later. It is installed from the GitHub repository (`npm install -g github:pomess/varve`), not from npm: the package is marked private, and the compiled `dist/` is committed so installing needs no build step. CI checks that `dist/` matches the source.
 
 Dependencies: `@modelcontextprotocol/sdk`, `zod`, `yaml`, `minisearch`. Tests use `vitest`.
 
@@ -411,7 +434,7 @@ Still open: whether other clients truncate long server `instructions`; whether C
 
 ## 17. Publishing
 
-MIT license. The repository is public at `pomess/temporal-atlas`, and anyone installs from it with `npm install -g github:pomess/temporal-atlas`. The package is not published to npm (ADRs 0005 and 0008). The search model is downloaded separately under its own MIT licence and is not in the repository.
+MIT license. The repository is public at `pomess/varve`, and anyone installs from it with `npm install -g github:pomess/varve`. The package is not published to npm (ADRs 0005 and 0008). The search model is downloaded separately under its own MIT licence and is not in the repository.
 
 ## 18. What v0.2 changed, and why
 
@@ -434,13 +457,13 @@ Rollups still need someone to write them. `tidy` and `install nightly` make that
 
 The search model is [potion-base-8M](https://huggingface.co/minishlab/potion-base-8M) (model2vec, MIT): a BERT WordPiece vocabulary of 29,528 tokens and one 256-dimensional vector per token. A text's embedding is the mean of its tokens' vectors (unknown tokens dropped, at most 512 tokens), scaled to unit length. That needs no neural network at query time, so it runs in plain TypeScript with no native code (ADR 0006). The tokenizer and the vectors match the reference `model2vec` library to float precision.
 
-`temporal-atlas models pull` downloads `tokenizer.json` and `model.safetensors` (about 30 MB) from a pinned revision into `~/.cache/temporal-atlas/models` (`TEMPORAL_ATLAS_MODELS` to change it), and checks their SHA-256 hashes before saving. `setup` offers it. The server never downloads anything: without the model, search is keyword only, as before.
+`varve models pull` downloads `tokenizer.json` and `model.safetensors` (about 30 MB) from a pinned revision into `~/.cache/varve/models` (`VARVE_MODELS` to change it), and checks their SHA-256 hashes before saving. `setup` offers it. The server never downloads anything: without the model, search is keyword only, as before.
 
 A note is embedded in pieces: paragraphs and list items, merged up to about 60 words, because one vector for a whole note says little. A note's similarity to a query is that of its best piece. Pieces at or above the similarity threshold (0.35) are ranked, the top 50 are kept, and that list is fused with the BM25 list by reciprocal rank (k = 60). Embeddings are kept in memory for the life of the process and redone when a file changes. The first search in a session embeds every note (about 60 ms for 250 notes); later ones cost about the same as keyword search.
 
 ## 20. Benchmark
 
-`temporal-atlas bench` ([BENCHMARK.md](../BENCHMARK.md)) scores search (hit@1, hit@5, MRR, in keyword, meaning and both modes) and the brief (tokens, build time, share of recent todos shown). It calls no model and only reads the atlas; its report holds numbers only (ADR 0007).
+`varve bench` ([BENCHMARK.md](BENCHMARK.md)) scores search (hit@1, hit@5, MRR, in keyword, meaning and both modes) and the brief (tokens, build time, share of recent todos shown). It calls no model and only reads the atlas; its report holds numbers only (ADR 0007).
 
 - `--fixture` builds `src/bench/fixture.ts` (26 invented sessions, 69 questions: 33 dev, seen while choosing the defaults, and 36 held out) in a temporary folder with fixed session ids, so the scores are the same everywhere.
 - Every score has a 95% bootstrap interval (fixed seed), and hybrid is compared with keyword search probe by probe.

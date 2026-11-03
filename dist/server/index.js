@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Atlas } from "../atlas.js";
 import { EVENT_TYPES } from "../sessions/note.js";
 import { VERSION } from "../version.js";
+import { defaultDir, envVar, NAME } from "../names.js";
 function text(body, notice) {
     return { content: [{ type: "text", text: notice ? `${body}\n\n${notice}` : body }] };
 }
@@ -21,9 +22,20 @@ function pendingText(p) {
         ...lines,
     ].join("\n");
 }
+const claimOps = {
+    state: z.string().optional().describe("Replaces the prose under 'What we know now'; claims there are kept."),
+    entry: z.string().optional().describe("A dated line for the timeline."),
+    claims: z
+        .array(z.object({ text: z.string().min(1), replaces: z.string().optional(), since: z.string().optional() }))
+        .optional()
+        .describe("Facts that hold from a day on, one sentence each. replaces: the id of the current claim it supersedes. since: YYYY-MM-DD, default the period's last day (or today)."),
+    close: z.array(z.string()).optional().describe("Ids of current claims that stopped being true, with nothing replacing them."),
+    open: z.array(z.string()).optional().describe("Things still to do or decide, one sentence each."),
+    resolve: z.array(z.object({ id: z.string(), how: z.string().optional() })).optional().describe("Open items that got done or decided."),
+};
 /** Build the MCP server for one agent session. */
 export function createServer(session) {
-    const server = new McpServer({ name: "temporal-atlas", version: VERSION }, { instructions: session.instructions() });
+    const server = new McpServer({ name: NAME, version: VERSION }, { instructions: session.instructions() });
     const tool = (name, description, shape, run, readOnly = false) => {
         server.registerTool(name, { description, inputSchema: shape, annotations: { readOnlyHint: readOnly } }, (async (args) => {
             const notice = session.checkpoint();
@@ -68,15 +80,12 @@ export function createServer(session) {
         const job = session.summarize(a);
         return `${job.instructions}\n\n# Sources for ${job.period} (${job.layer}, scope ${job.scope})\n\n${job.sources}`;
     });
-    tool("seal", "Save the summary of a closed period and seal it. headline: one line. content: Markdown within the length target. topic_updates: optional changes to durable knowledge found in this period.", {
+    tool("seal", "Save the summary of a closed period and seal it. headline: one line. content: Markdown within the length target. topic_updates: claims and open items this period settled, changed or left open, per topic; ids come from 'Topics in this scope' in the sources. Bad ids or days refuse the whole call before anything is sealed.", {
         period: z.string(),
         scope,
         headline: z.string().min(1),
         content: z.string().min(1),
-        topic_updates: z
-            .array(z.object({ name: z.string(), state: z.string().optional(), entry: z.string().optional() }))
-            .optional()
-            .describe("state replaces the topic's current state; entry is added to its timeline."),
+        topic_updates: z.array(z.object({ name: z.string(), ...claimOps })).optional(),
     }, (a) => {
         const r = session.seal({ ...a, topicUpdates: a.topic_updates });
         const parts = [`Sealed ${r.period} (scope ${r.scope}).`];
@@ -107,10 +116,10 @@ export function createServer(session) {
             return "No matches.";
         return results.map((r) => `- ${r.note} (${r.layer} ${r.period}, scope ${r.scope}, score ${r.score}, matched by ${r.match})\n  ${r.snippet}`).join("\n");
     }, true);
-    tool("topic", "Read a topic note (durable knowledge about one subject), or create or update it. Without update it reads. update.state replaces 'What we know now'; update.entry adds a dated timeline line. Similar existing names are offered instead of creating a duplicate unless force is true.", {
+    tool("topic", "Read a topic note (durable knowledge about one subject: dated claims, open items and their history), or create or update it. Without update it reads. update.claims adds facts (replaces: a claim id it supersedes); update.close ends claims; update.open adds things to do or decide; update.resolve closes them; dated today, citing this session. Similar existing names are offered instead of creating a duplicate unless force is true.", {
         name: z.string().min(1),
         scope,
-        update: z.object({ state: z.string().optional(), entry: z.string().optional() }).optional(),
+        update: z.object(claimOps).optional(),
         force: z.boolean().optional(),
     }, (a) => {
         const r = session.topic(a);
@@ -119,7 +128,8 @@ export function createServer(session) {
         }
         if (!r.exists)
             return `No topic named "${r.name}" in scope ${r.scope}.`;
-        return `${r.created ? "Created" : a.update ? "Updated" : "Topic"} ${r.name} (scope ${r.scope})\n\n${r.content}`;
+        const changed = r.changes?.length ? `: ${r.changes.join(", ")}` : "";
+        return `${r.created ? "Created" : a.update ? "Updated" : "Topic"} ${r.name} (scope ${r.scope})${changed}\n\n${r.content}`;
     });
     tool("scopes", "List scopes this session can see, or change one: isolated (hide it from every other scope), mapHere (send this folder's future sessions to that scope), mergeInto (move all its notes into another scope).", {
         set: z
@@ -140,14 +150,14 @@ export function createServer(session) {
 }
 export function atlasDir(env = process.env) {
     const home = env.HOME ?? env.USERPROFILE ?? "";
-    const dir = env.TEMPORAL_ATLAS_DIR || `${home}/TemporalAtlas`;
+    const dir = envVar(env, "DIR") || defaultDir(home);
     return dir.replace(/^~(?=$|[\\/])/, home);
 }
 /** Start the server over stdio for the agent that launched this process. */
 export async function runStdio() {
     const atlas = new Atlas({ dir: atlasDir() });
     const session = atlas.session({
-        cwd: process.env.TEMPORAL_ATLAS_CWD || process.cwd(),
+        cwd: envVar(process.env, "CWD") || process.cwd(),
         clientSessionId: process.env.CLAUDE_CODE_SESSION_ID || undefined,
         client: process.env.CLAUDECODE ? "claude-code" : undefined,
     });

@@ -7,8 +7,9 @@ export interface HookPayload {
   hook_event_name?: string;
 }
 
-/** Set for the `claude -p` runs that `temporal-atlas tidy` starts, so their own hooks record nothing. */
-export const CHILD_ENV = "TEMPORAL_ATLAS_CHILD";
+/** Set for the `claude -p` runs that `varve tidy` starts, so their own hooks record nothing. The old name still counts. */
+export const CHILD_ENV = "VARVE_CHILD";
+const LEGACY_CHILD_ENV = "TEMPORAL_ATLAS_CHILD";
 
 export const HOOK_EVENTS = ["session-start", "stop", "session-end"] as const;
 
@@ -20,7 +21,7 @@ export function runHook(atlas: Atlas, event: string, payload: HookPayload, env: 
   if (!(HOOK_EVENTS as readonly string[]).includes(event)) {
     throw new Error(`Unknown hook event "${event}". Use ${HOOK_EVENTS.join(", ")}.`);
   }
-  if (env[CHILD_ENV]) return { result: "skipped", reason: "a temporal-atlas child process" };
+  if (env[CHILD_ENV] || env[LEGACY_CHILD_ENV]) return { result: "skipped", reason: "a varve child process" };
   if (!payload.session_id) return { result: "skipped", reason: "no session_id in payload" };
   const input = {
     sessionId: payload.session_id,

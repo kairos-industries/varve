@@ -9,7 +9,7 @@ import { buildBrief } from "./brief.js";
 import { amend, scanEdits } from "./edits.js";
 import { search } from "./search.js";
 import { mergeScope, rebuildIndexes } from "./scopes/manage.js";
-import { topic, topicScopes } from "./topics.js";
+import { applyRollupTopics, checkRollupTopics, topic, topicScopes } from "./topics.js";
 import { zoom } from "./zoom.js";
 import { allScopes, markParentsStale, refreshAround, ScopeView } from "./periods.js";
 import { pending, seal, summarize } from "./rollup/index.js";
@@ -303,7 +303,7 @@ function originFields(det, cwd) {
     const path = det.gitRoot ?? cwd;
     return path ? { origin: path, origin_kind: "path" } : {};
 }
-const USAGE = `Temporal Atlas is your memory of past work, layered by time: sessions, days, weeks, months, years. The current scope is "{scope}".
+const USAGE = `Varve is your memory of past work, layered by time: sessions, days, weeks, months, years. The current scope is "{scope}".
 - During work, call log for each decision (with the reason), notable change, finding or todo.
 - If this session's work belongs to a different client or project than "{scope}", call log with scope set to that project's name; the session moves there. Keep each client's work in its own scope.
 - Before you finish, call close_session with a one-line headline and a summary using ### Done, ### Decisions, ### Open threads.
@@ -311,7 +311,7 @@ const USAGE = `Temporal Atlas is your memory of past work, layered by time: sess
 - For more history: brief (wider view), zoom (open any period or session), search (keywords), topic (durable knowledge).
 `;
 const AGENT_ROLLUPS = "- If a tool result reports pending rollups, work through them with summarize and seal. Past the cost gate, ask the user first.";
-const NIGHTLY_ROLLUPS = "- Rollups run overnight (temporal-atlas tidy). Do them with summarize and seal only when the user asks.";
+const NIGHTLY_ROLLUPS = "- Rollups run overnight (varve tidy). Do them with summarize and seal only when the user asks.";
 const REGISTRY_TTL_MS = 7 * 24 * 3600 * 1000;
 /** How far apart a Codex hook session and an MCP server may start and still be taken for one conversation. */
 const JOIN_WINDOW_MS = 5 * 60 * 1000;
@@ -630,9 +630,11 @@ export class AtlasSession {
     }
     seal(input) {
         const scope = this.resolveScope(input.scope);
+        const updates = input.topicUpdates ?? [];
+        checkRollupTopics(this.atlas, scope, input.period, updates);
         const result = seal(this.atlas, this.key, scope, input);
-        const topics = (input.topicUpdates ?? []).map((u) => topic(this.atlas, [scope], { name: u.name, update: { state: u.state, entry: u.entry }, force: true, source: link(result.path) }));
-        return { ...result, topics: topics.map((x) => x.name) };
+        const topics = applyRollupTopics(this.atlas, scope, input.period, link(result.path), updates);
+        return { ...result, topics: topics.map((x) => (x.changes?.length ? `${x.name} (${x.changes.join(", ")})` : x.name)) };
     }
     scopes(input = {}) {
         const set = input.set;
@@ -675,6 +677,7 @@ export class AtlasSession {
     }
     topic(input) {
         const scopes = input.scope ? [this.resolveScope(input.scope)] : topicScopes(this.scope);
+        this.adoptHookNote();
         const source = this.path && existsSync(this.path) ? link(this.path) : undefined;
         return topic(this.atlas, scopes, { ...input, source });
     }
@@ -701,7 +704,7 @@ export class AtlasSession {
             const over = p.totalTokens > p.gateTokens;
             lines.push(`${p.items.length} rollup(s) pending, about ${p.totalTokens} tokens${over ? `, over the ${p.gateTokens} gate: ask the user before doing the ones marked needs_confirmation` : ""}. Call pending() for the list.`);
         }
-        return lines.length ? `[Temporal Atlas checkpoint]\n${lines.join("\n")}` : undefined;
+        return lines.length ? `[Varve checkpoint]\n${lines.join("\n")}` : undefined;
     }
 }
 /** Headings inside a session summary sit below the note's own ### sections. */

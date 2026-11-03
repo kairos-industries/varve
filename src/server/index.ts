@@ -5,6 +5,7 @@ import { Atlas, type AtlasSession } from "../atlas.js";
 import type { PendingItem } from "../rollup/index.js";
 import { EVENT_TYPES } from "../sessions/note.js";
 import { VERSION } from "../version.js";
+import { defaultDir, envVar, NAME } from "../names.js";
 
 type Text = { content: { type: "text"; text: string }[]; isError?: boolean };
 
@@ -26,9 +27,21 @@ function pendingText(p: { items: PendingItem[]; totalTokens: number; gateTokens:
   ].join("\n");
 }
 
+const claimOps = {
+  state: z.string().optional().describe("Replaces the prose under 'What we know now'; claims there are kept."),
+  entry: z.string().optional().describe("A dated line for the timeline."),
+  claims: z
+    .array(z.object({ text: z.string().min(1), replaces: z.string().optional(), since: z.string().optional() }))
+    .optional()
+    .describe("Facts that hold from a day on, one sentence each. replaces: the id of the current claim it supersedes. since: YYYY-MM-DD, default the period's last day (or today)."),
+  close: z.array(z.string()).optional().describe("Ids of current claims that stopped being true, with nothing replacing them."),
+  open: z.array(z.string()).optional().describe("Things still to do or decide, one sentence each."),
+  resolve: z.array(z.object({ id: z.string(), how: z.string().optional() })).optional().describe("Open items that got done or decided."),
+};
+
 /** Build the MCP server for one agent session. */
 export function createServer(session: AtlasSession): McpServer {
-  const server = new McpServer({ name: "temporal-atlas", version: VERSION }, { instructions: session.instructions() });
+  const server = new McpServer({ name: NAME, version: VERSION }, { instructions: session.instructions() });
 
   const tool = <S extends z.ZodRawShape>(
     name: string,
@@ -117,16 +130,13 @@ export function createServer(session: AtlasSession): McpServer {
 
   tool(
     "seal",
-    "Save the summary of a closed period and seal it. headline: one line. content: Markdown within the length target. topic_updates: optional changes to durable knowledge found in this period.",
+    "Save the summary of a closed period and seal it. headline: one line. content: Markdown within the length target. topic_updates: claims and open items this period settled, changed or left open, per topic; ids come from 'Topics in this scope' in the sources. Bad ids or days refuse the whole call before anything is sealed.",
     {
       period: z.string(),
       scope,
       headline: z.string().min(1),
       content: z.string().min(1),
-      topic_updates: z
-        .array(z.object({ name: z.string(), state: z.string().optional(), entry: z.string().optional() }))
-        .optional()
-        .describe("state replaces the topic's current state; entry is added to its timeline."),
+      topic_updates: z.array(z.object({ name: z.string(), ...claimOps })).optional(),
     },
     (a) => {
       const r = session.seal({ ...a, topicUpdates: a.topic_updates });
@@ -172,11 +182,11 @@ export function createServer(session: AtlasSession): McpServer {
 
   tool(
     "topic",
-    "Read a topic note (durable knowledge about one subject), or create or update it. Without update it reads. update.state replaces 'What we know now'; update.entry adds a dated timeline line. Similar existing names are offered instead of creating a duplicate unless force is true.",
+    "Read a topic note (durable knowledge about one subject: dated claims, open items and their history), or create or update it. Without update it reads. update.claims adds facts (replaces: a claim id it supersedes); update.close ends claims; update.open adds things to do or decide; update.resolve closes them; dated today, citing this session. Similar existing names are offered instead of creating a duplicate unless force is true.",
     {
       name: z.string().min(1),
       scope,
-      update: z.object({ state: z.string().optional(), entry: z.string().optional() }).optional(),
+      update: z.object(claimOps).optional(),
       force: z.boolean().optional(),
     },
     (a) => {
@@ -185,7 +195,8 @@ export function createServer(session: AtlasSession): McpServer {
         return `No topic named "${r.name}". Similar: ${r.similar.join(", ")}. Use one of those, or pass force: true to create "${r.name}".`;
       }
       if (!r.exists) return `No topic named "${r.name}" in scope ${r.scope}.`;
-      return `${r.created ? "Created" : a.update ? "Updated" : "Topic"} ${r.name} (scope ${r.scope})\n\n${r.content}`;
+      const changed = r.changes?.length ? `: ${r.changes.join(", ")}` : "";
+      return `${r.created ? "Created" : a.update ? "Updated" : "Topic"} ${r.name} (scope ${r.scope})${changed}\n\n${r.content}`;
     },
   );
 
@@ -221,7 +232,7 @@ export function createServer(session: AtlasSession): McpServer {
 
 export function atlasDir(env: NodeJS.ProcessEnv = process.env): string {
   const home = env.HOME ?? env.USERPROFILE ?? "";
-  const dir = env.TEMPORAL_ATLAS_DIR || `${home}/TemporalAtlas`;
+  const dir = envVar(env, "DIR") || defaultDir(home);
   return dir.replace(/^~(?=$|[\\/])/, home);
 }
 
@@ -229,7 +240,7 @@ export function atlasDir(env: NodeJS.ProcessEnv = process.env): string {
 export async function runStdio() {
   const atlas = new Atlas({ dir: atlasDir() });
   const session = atlas.session({
-    cwd: process.env.TEMPORAL_ATLAS_CWD || process.cwd(),
+    cwd: envVar(process.env, "CWD") || process.cwd(),
     clientSessionId: process.env.CLAUDE_CODE_SESSION_ID || undefined,
     client: process.env.CLAUDECODE ? "claude-code" : undefined,
   });

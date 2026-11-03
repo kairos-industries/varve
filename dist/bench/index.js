@@ -161,7 +161,7 @@ function atlasStats(atlas, scopes) {
 }
 function header(dataset, atlas, scopes, model) {
     return {
-        benchmark: "temporal-atlas",
+        benchmark: "varve",
         version: VERSION,
         dataset,
         ranOn: new Date().toISOString().slice(0, 10),
@@ -295,8 +295,8 @@ export async function paraphrase(probes, runner, opts) {
 }
 export function formatReport(r) {
     const lines = [
-        `Temporal Atlas benchmark ${r.version}, ${r.dataset} dataset, ${r.ranOn}`,
-        `Atlas: ${r.atlas.scopes} scopes, ${r.atlas.sessions} sessions. Search model: ${r.model ? r.model.name : "none (keyword only; run `temporal-atlas models pull`)"}`,
+        `Varve benchmark ${r.version}, ${r.dataset} dataset, ${r.ranOn}`,
+        `Atlas: ${r.atlas.scopes} scopes, ${r.atlas.sessions} sessions. Search model: ${r.model ? r.model.name : "none (keyword only; run `varve models pull`)"}`,
         "",
         "Search             probes  mode      hit@1  hit@5  MRR (95% interval)   ms",
     ];

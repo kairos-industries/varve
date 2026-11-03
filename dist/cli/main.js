@@ -16,21 +16,21 @@ import { runHook } from "./hook.js";
 import { installClaudeCode, installCodex, serverCommand } from "./install.js";
 import { installNightly, readNightlyState, writeNightlyState } from "./nightly.js";
 import { setup, uninstall } from "./setup.js";
-const HELP = `temporal-atlas ${VERSION}
+const HELP = `varve ${VERSION}
 
 Usage:
-  temporal-atlas                      Run the MCP server over stdio
-  temporal-atlas setup                Set up everything for Claude Code in one go (asks before each part)
-                                        --dir <path>         atlas folder (default: $TEMPORAL_ATLAS_DIR or ~/TemporalAtlas)
+  varve                      Run the MCP server over stdio
+  varve setup                Set up everything for Claude Code in one go (asks before each part)
+                                        --dir <path>         atlas folder (default: $VARVE_DIR or ~/Varve)
                                         --isolate | --no-isolate   keep each project's memory apart (default: yes)
                                         --nightly            also schedule the nightly summaries
                                         --yes                use the defaults without asking
-  temporal-atlas uninstall            Remove the hooks, the MCP registration and the nightly run; keeps your notes
-  temporal-atlas init [dir]           Create an atlas (default: $TEMPORAL_ATLAS_DIR or ~/TemporalAtlas)
-  temporal-atlas install claude-code  Add the capture hooks to ~/.claude/settings.json (asks first; --yes to skip)
-  temporal-atlas install codex        Add the capture hooks to ~/.codex/hooks.json (asks first; --yes to skip)
-  temporal-atlas install nightly      Schedule \`tidy --scheduled\` every night, catching up after the computer was off (asks first; --at HH:MM, --remove)
-  temporal-atlas tidy                 Write pending rollups with \`claude -p\`, within a token and dollar budget
+  varve uninstall            Remove the hooks, the MCP registration and the nightly run; keeps your notes
+  varve init [dir]           Create an atlas (default: $VARVE_DIR or ~/Varve)
+  varve install claude-code  Add the capture hooks to ~/.claude/settings.json (asks first; --yes to skip)
+  varve install codex        Add the capture hooks to ~/.codex/hooks.json (asks first; --yes to skip)
+  varve install nightly      Schedule \`tidy --scheduled\` every night, catching up after the computer was off (asks first; --at HH:MM, --remove)
+  varve tidy                 Write pending rollups with \`claude -p\`, within a token and dollar budget
                                         --dry-run            show the plan and estimate, write nothing
                                         --yes                run without asking
                                         --scheduled          run without asking, at most once per atlas day (used by the schedule)
@@ -39,12 +39,12 @@ Usage:
                                         --max-tokens <n>     default tidy.maxTokens
                                         --max-usd <amount>   default tidy.maxUsd
                                         --orphans            also summarize orphan sessions from transcripts
-  temporal-atlas backfill             Record activity for older sessions from their transcripts (no model)
+  varve backfill             Record activity for older sessions from their transcripts (no model)
                                         --dry-run            report what would change
                                         --prune              delete headless runs instead of marking them skipped
-  temporal-atlas models pull          Download the search model (${MODEL.name}, about 30 MB, once) so search matches by meaning
-  temporal-atlas models status        Show whether the search model is installed
-  temporal-atlas bench                How well search and the brief bring back past work, on your atlas (read only, no model)
+  varve models pull          Download the search model (${MODEL.name}, about 30 MB, once) so search matches by meaning
+  varve models status        Show whether the search model is installed
+  varve bench                How well search and the brief bring back past work, on your atlas (read only, no model)
                                         --fixture            on the bundled example atlas instead, the same for everyone
                                         --json               print the report as JSON
                                         --out <file>         where to save the report (default .atlas/bench/)
@@ -53,11 +53,11 @@ Usage:
                                         --paraphrase         have a model reword the queries first (paid; asks first)
                                           --model <name>       default haiku
                                           --max-usd <amount>   default 0.25
-  temporal-atlas doctor               Check the atlas: backlog, unrecorded sessions, hooks, broken notes
-  temporal-atlas hook <event>         Used by the hooks: session-start, stop or session-end, payload on stdin (--client codex for Codex)
+  varve doctor               Check the atlas: backlog, unrecorded sessions, hooks, broken notes
+  varve hook <event>         Used by the hooks: session-start, stop or session-end, payload on stdin (--client codex for Codex)
 
-Every command takes --dir <path> for the atlas folder instead of $TEMPORAL_ATLAS_DIR.
-Models are kept in $TEMPORAL_ATLAS_MODELS, default ~/.cache/temporal-atlas/models.
+Every command takes --dir <path> for the atlas folder instead of $VARVE_DIR.
+Models are kept in $VARVE_MODELS, default ~/.cache/varve/models.
 `;
 function flag(args, name) {
     return args.includes(name);
@@ -195,19 +195,20 @@ function init(dir) {
     console.log(`Atlas ready at ${dir}
 
 Connect it to an agent:
-  Claude Code:  claude mcp add temporal-atlas --scope user -e TEMPORAL_ATLAS_DIR=${JSON.stringify(dir)} -- ${line}
-  Codex:        codex mcp add temporal-atlas --env TEMPORAL_ATLAS_DIR=${JSON.stringify(dir)} -- ${line}
-  Others:       command ${JSON.stringify(command)}, args ${JSON.stringify(args)}, env TEMPORAL_ATLAS_DIR=${JSON.stringify(dir)}
+  Claude Code:  claude mcp add varve --scope user -e VARVE_DIR=${JSON.stringify(dir)} -- ${line}
+  Codex:        codex mcp add varve --env VARVE_DIR=${JSON.stringify(dir)} -- ${line}
+  Others:       command ${JSON.stringify(command)}, args ${JSON.stringify(args)}, env VARVE_DIR=${JSON.stringify(dir)}
 
-For automatic capture in Claude Code:  temporal-atlas install claude-code
-For automatic capture in Codex:        temporal-atlas install codex
-To write rollups overnight:            temporal-atlas install nightly`);
+For automatic capture in Claude Code:  varve install claude-code
+For automatic capture in Codex:        varve install codex
+To write rollups overnight:            varve install nightly`);
 }
 async function main(argv) {
-    // `--dir` anywhere sets the atlas folder, for places that cannot set TEMPORAL_ATLAS_DIR (Windows hooks and tasks).
+    // `--dir` anywhere sets the folder, for places that cannot set VARVE_DIR (Windows hooks and tasks).
     const at = argv.indexOf("--dir");
     if (at >= 0) {
-        process.env.TEMPORAL_ATLAS_DIR = option(argv, "--dir");
+        process.env.VARVE_DIR = option(argv, "--dir");
+        delete process.env.TEMPORAL_ATLAS_DIR;
         argv = argv.filter((_, i) => i !== at && i !== at + 1);
     }
     const [cmd, ...rest] = argv;
@@ -252,7 +253,7 @@ async function main(argv) {
                 return;
             }
             if (rest[0] === undefined || rest[0] === "status") {
-                console.log(modelInstalled(dir) ? `${MODEL.name} installed at ${dir}. Search matches by keyword and by meaning.` : `No embedding model at ${dir}. Search is keyword only. Run \`temporal-atlas models pull\` (about 30 MB, once).`);
+                console.log(modelInstalled(dir) ? `${MODEL.name} installed at ${dir}. Search matches by keyword and by meaning.` : `No embedding model at ${dir}. Search is keyword only. Run \`varve models pull\` (about 30 MB, once).`);
                 return;
             }
             throw new Error("Use `models pull` or `models status`.");
@@ -274,7 +275,7 @@ async function main(argv) {
                 runHook(new Atlas({ dir: atlasDir() }), rest[0] ?? "", raw.trim() ? JSON.parse(raw) : {}, process.env, option(rest, "--client") ?? "claude-code");
             }
             catch (err) {
-                process.stderr.write(`temporal-atlas hook: ${err instanceof Error ? err.message : String(err)}\n`);
+                process.stderr.write(`varve hook: ${err instanceof Error ? err.message : String(err)}\n`);
             }
             return;
         }

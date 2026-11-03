@@ -103,9 +103,18 @@ describe("tidy", () => {
 
 describe("parsing model replies", () => {
   it("reads the headline line and the note", () => {
-    expect(parseReply("Headline: Did things\n\n### What happened\n- x")).toEqual({ headline: "Did things", content: "### What happened\n- x" });
-    expect(parseReply("```markdown\n**Headline:** Bold one\n\nBody\n```")).toEqual({ headline: "Bold one", content: "Body" });
+    expect(parseReply("Headline: Did things\n\n### What happened\n- x")).toMatchObject({ headline: "Did things", content: "### What happened\n- x", topics: [] });
+    expect(parseReply("```markdown\n**Headline:** Bold one\n\nBody\n```")).toMatchObject({ headline: "Bold one", content: "Body" });
     expect(() => parseReply("Just a note")).toThrow(/Headline/);
+  });
+
+  it("takes topic updates from a closing topics block, and reports one that does not parse", () => {
+    const ok = parseReply('Headline: H\n\nBody\n\n```topics\n[{"name": "Auth design", "claims": [{"text": "Okta for SSO."}]}]\n```');
+    expect(ok).toMatchObject({ content: "Body", topics: [{ name: "Auth design", claims: [{ text: "Okta for SSO." }] }] });
+    expect(ok.topicsError).toBeUndefined();
+    const bad = parseReply("Headline: H\n\nBody\n\n```topics\n[{name: oops}]\n```");
+    expect(bad).toMatchObject({ content: "Body", topics: [] });
+    expect(bad.topicsError).toMatch(/did not parse/);
   });
 });
 
@@ -121,7 +130,7 @@ describe("the claude runner", () => {
 let input = "";
 process.stdin.on("data", (d) => (input += d));
 process.stdin.on("end", () => {
-  require("fs").writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify({ args: process.argv.slice(2), child: process.env.TEMPORAL_ATLAS_CHILD, input }));
+  require("fs").writeFileSync(${JSON.stringify(argsFile)}, JSON.stringify({ args: process.argv.slice(2), child: process.env.VARVE_CHILD, legacyChild: process.env.TEMPORAL_ATLAS_CHILD, input }));
   process.stdout.write(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Headline: H\\n\\nBody", total_cost_usd: 0.0123, usage: { input_tokens: 900, output_tokens: 40 } }));
 });
 `,
@@ -132,6 +141,7 @@ process.stdin.on("end", () => {
     expect(reply).toEqual({ text: "Headline: H\n\nBody", costUsd: 0.0123, inputTokens: 900, outputTokens: 40 });
     const seen = JSON.parse(readFileSync(argsFile, "utf8"));
     expect(seen.child).toBe("1");
+    expect(seen.legacyChild).toBe("1");
     expect(seen.input).toBe("the prompt");
     expect(seen.args).toEqual(claudeArgs("haiku", 0.75));
     for (const f of ["--no-session-persistence", "--strict-mcp-config", "--tools"]) expect(seen.args).toContain(f);
@@ -171,11 +181,11 @@ describe("nightly mode", () => {
     expect(plist).toMatch(/<key>RunAtLoad<\/key>\s*<true\/>/);
     expect(plist).toMatch(/<key>StartInterval<\/key>\s*<integer>3600<\/integer>/);
     expect(cronLine({ program, atlasDir: "/a", at: "04:30", log: "/a/.atlas/tidy.out" })).toBe(
-      "30 * * * * TEMPORAL_ATLAS_DIR='/a' '/usr/local/bin/node' '/repo/dist/cli/main.js' 'tidy' '--scheduled' >> '/a/.atlas/tidy.out' 2>&1",
+      "30 * * * * VARVE_DIR='/a' '/usr/local/bin/node' '/repo/dist/cli/main.js' 'tidy' '--scheduled' >> '/a/.atlas/tidy.out' 2>&1",
     );
     const win = tidyProgram("C:\\Users\\me\\npm\\main.js", "C:\\node\\node.exe");
     expect(schtasksCommand({ program: win, atlasDir: "C:\\Users\\me\\TemporalAtlas", at: "4:30" })).toBe(
-      'schtasks /Create /TN "temporal-atlas-tidy" /SC HOURLY /ST 04:30 /TR "\\"C:\\node\\node.exe\\" \\"C:\\Users\\me\\npm\\main.js\\" \\"--dir\\" \\"C:\\Users\\me\\TemporalAtlas\\" tidy --scheduled" /F',
+      'schtasks /Create /TN "varve-tidy" /SC HOURLY /ST 04:30 /TR "\\"C:\\node\\node.exe\\" \\"C:\\Users\\me\\npm\\main.js\\" \\"--dir\\" \\"C:\\Users\\me\\TemporalAtlas\\" tidy --scheduled" /F',
     );
   });
 

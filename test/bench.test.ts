@@ -15,7 +15,7 @@ function strings(o: unknown): string[] {
   return [];
 }
 
-const ALLOWED = /^(temporal-atlas|fixture|own|own-paraphrased|\d{4}-\d{2}-\d{2}|aix|darwin|freebsd|linux|openbsd|sunos|win32|[\d.]+|potion-base-8M|[0-9a-f]{40}|haiku|sonnet)$/;
+const ALLOWED = /^(varve|fixture|own|own-paraphrased|\d{4}-\d{2}-\d{2}|aix|darwin|freebsd|linux|openbsd|sunos|win32|[\d.]+|potion-base-8M|[0-9a-f]{40}|haiku|sonnet)$/;
 
 function worked() {
   const t = setup("2026-10-08T10:00:00+02:00");

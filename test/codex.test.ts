@@ -140,7 +140,7 @@ describe("setup with Codex", () => {
     expect(h.UserPromptSubmit).toHaveLength(1);
     expect(h.Stop[0].hooks[0].command).toMatch(/hook stop --client codex$/);
     expect(h.SessionEnd[0].hooks[0].timeout).toBe(3);
-    expect(calls).toContainEqual(expect.arrayContaining(["/usr/local/bin/codex", "mcp", "add", "temporal-atlas"]));
+    expect(calls).toContainEqual(expect.arrayContaining(["/usr/local/bin/codex", "mcp", "add", "varve"]));
 
     await uninstall({ dir: t.dir, script: "/opt/atlas/dist/cli/main.js", yes: true }, d);
     expect(Object.keys(hooks().hooks)).toEqual(["UserPromptSubmit"]);

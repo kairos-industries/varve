@@ -57,7 +57,7 @@ export interface Comparison {
 }
 
 export interface BenchReport {
-  benchmark: "temporal-atlas";
+  benchmark: "varve";
   version: string;
   dataset: "fixture" | "own" | "own-paraphrased";
   ranOn: string;
@@ -227,7 +227,7 @@ function atlasStats(atlas: Atlas, scopes: string[]): BenchReport["atlas"] {
 
 function header(dataset: BenchReport["dataset"], atlas: Atlas, scopes: string[], model?: Embedder): Omit<BenchReport, "retrieval"> {
   return {
-    benchmark: "temporal-atlas",
+    benchmark: "varve",
     version: VERSION,
     dataset,
     ranOn: new Date().toISOString().slice(0, 10),
@@ -366,8 +366,8 @@ export async function paraphrase(probes: Probe[], runner: ModelRunner, opts: { m
 
 export function formatReport(r: BenchReport): string {
   const lines = [
-    `Temporal Atlas benchmark ${r.version}, ${r.dataset} dataset, ${r.ranOn}`,
-    `Atlas: ${r.atlas.scopes} scopes, ${r.atlas.sessions} sessions. Search model: ${r.model ? r.model.name : "none (keyword only; run `temporal-atlas models pull`)"}`,
+    `Varve benchmark ${r.version}, ${r.dataset} dataset, ${r.ranOn}`,
+    `Atlas: ${r.atlas.scopes} scopes, ${r.atlas.sessions} sessions. Search model: ${r.model ? r.model.name : "none (keyword only; run `varve models pull`)"}`,
     "",
     "Search             probes  mode      hit@1  hit@5  MRR (95% interval)   ms",
   ];

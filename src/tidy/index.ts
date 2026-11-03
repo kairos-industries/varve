@@ -9,10 +9,12 @@ import { scanEdits } from "../edits.js";
 import { allScopes } from "../periods.js";
 import { lengthTarget, lockKey, type PendingItem, pending, seal, summarize } from "../rollup/index.js";
 import { releaseLock } from "../store/lock.js";
+import { applyRollupTopics, checkRollupTopics, type NamedTopicUpdate } from "../topics.js";
+import { link } from "../store/note.js";
 
 /**
  * The nightly tidy: write pending rollups with a model, one call per rollup, inside a token
- * and dollar budget. This is the only part of Temporal Atlas that calls a model, and it runs
+ * and dollar budget. This is the only part of Varve that calls a model, and it runs
  * only when the user starts it or schedules it (ADR 0004).
  */
 
@@ -60,7 +62,8 @@ export function claudeRunner(atlas: Atlas): ModelRunner {
       mkdirSync(atlas.paths.stateDir, { recursive: true });
       const child = spawn(atlas.config.tidy.command, claudeArgs(opts.model, opts.maxUsd), {
         cwd: atlas.paths.stateDir,
-        env: { ...process.env, [CHILD_ENV]: "1" },
+        // The old name too, for hooks still installed from a version before the rename.
+        env: { ...process.env, [CHILD_ENV]: "1", TEMPORAL_ATLAS_CHILD: "1" },
         stdio: ["pipe", "pipe", "pipe"],
       }) as ChildProcessWithoutNullStreams;
       let out = "";
@@ -99,12 +102,27 @@ export function claudeRunner(atlas: Atlas): ModelRunner {
     });
 }
 
-/** Split a reply into its headline and note. */
-export function parseReply(text: string): { headline: string; content: string } {
-  const body = text.trim().replace(/^```[a-z]*\n([\s\S]*?)\n```$/i, "$1").trim();
+/**
+ * Split a reply into its headline, note and topic updates. The topic updates come last, as a JSON
+ * array in a fenced block marked topics; a block that does not parse is reported, not fatal.
+ */
+export function parseReply(text: string): { headline: string; content: string; topics: NamedTopicUpdate[]; topicsError?: string } {
+  let topics: NamedTopicUpdate[] = [];
+  let topicsError: string | undefined;
+  const withoutTopics = text.trim().replace(/\n*```topics\s*\n([\s\S]*?)\n```\s*$/i, (_m, json: string) => {
+    try {
+      const parsed = JSON.parse(json);
+      if (!Array.isArray(parsed) || parsed.some((u) => typeof u?.name !== "string")) throw new Error("not an array of objects with a name");
+      topics = parsed as NamedTopicUpdate[];
+    } catch (e) {
+      topicsError = `the topics block did not parse: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    return "";
+  });
+  const body = withoutTopics.trim().replace(/^```[a-z]*\n([\s\S]*?)\n```$/i, "$1").trim();
   const m = /^\**headline:?\**:?\s*(.+)\n+([\s\S]+)$/i.exec(body);
   if (!m || !m[2]!.trim()) throw new ModelError("the reply did not start with a Headline line followed by the note");
-  return { headline: m[1]!.replace(/\*+$/, "").trim(), content: m[2]!.trim() };
+  return { headline: m[1]!.replace(/\*+$/, "").trim(), content: m[2]!.trim(), topics, topicsError };
 }
 
 export interface TidyOptions {
@@ -124,6 +142,10 @@ export interface TidyOutcome {
   layer: string;
   result: "sealed" | "failed";
   reason?: string;
+  /** Sealed, but its topic updates were left out, and why. */
+  warning?: string;
+  /** What the topic updates changed, e.g. "Auth design (claim ^c1a2b3)". */
+  topics?: string[];
   tokens: number;
   costUsd: number;
 }
@@ -186,7 +208,7 @@ export async function tidy(atlas: Atlas, opts: TidyOptions): Promise<TidyReport>
       const outcome = { scope: item.scope, period: item.period, layer: item.layer, tokens: used, costUsd: cost, ...o };
       outcomes.push(outcome);
       logTidy(atlas, outcome);
-      say(`${o.result === "sealed" ? "sealed" : "failed"} ${item.scope} ${item.period} (${item.layer}, ${used} tokens, $${cost.toFixed(3)})${o.reason ? `: ${o.reason}` : ""}`);
+      say(`${o.result === "sealed" ? "sealed" : "failed"} ${item.scope} ${item.period} (${item.layer}, ${used} tokens, $${cost.toFixed(3)})${o.reason ? `: ${o.reason}` : ""}${o.topics ? `; topics: ${o.topics.join("; ")}` : ""}${o.warning ? `; ${o.warning}` : ""}`);
     };
 
     let job: ReturnType<typeof summarize>;
@@ -199,15 +221,27 @@ export async function tidy(atlas: Atlas, opts: TidyOptions): Promise<TidyReport>
     const prompt = `${job.instructions}\n\n# Sources for ${job.period} (${job.layer}, scope ${job.scope})\n\n${job.sources}`;
     try {
       let reply = parseReply(await ask(prompt));
+      let sealed: ReturnType<typeof seal>;
       try {
-        seal(atlas, owner, item.scope, { period: item.period, ...reply });
+        sealed = seal(atlas, owner, item.scope, { period: item.period, headline: reply.headline, content: reply.content });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (!/Shorten it/.test(msg)) throw e;
         reply = parseReply(await ask(`${prompt}\n\nYour first version was too long: ${msg}\nRewrite it in the same format.\n\n${reply.content}`));
-        seal(atlas, owner, item.scope, { period: item.period, ...reply });
+        sealed = seal(atlas, owner, item.scope, { period: item.period, headline: reply.headline, content: reply.content });
       }
-      record({ result: "sealed" });
+      // The summary counts more than its topic updates: a bad update is skipped, not a reason to fail the rollup.
+      let warning = reply.topicsError;
+      let changed: string[] | undefined;
+      if (!warning && reply.topics.length && item.layer !== "session") {
+        try {
+          checkRollupTopics(atlas, item.scope, item.period, reply.topics);
+          changed = applyRollupTopics(atlas, item.scope, item.period, link(sealed.path), reply.topics).map((t) => `${t.name}${t.changes?.length ? ` (${t.changes.join(", ")})` : ""}`);
+        } catch (e) {
+          warning = `topic updates skipped: ${e instanceof Error ? e.message : String(e)}`;
+        }
+      }
+      record({ result: "sealed", ...(warning ? { warning } : {}), ...(changed?.length ? { topics: changed } : {}) });
     } catch (e) {
       releaseLock(atlas.paths.locksDir, lockKey(item.scope, item.period));
       record({ result: "failed", reason: e instanceof Error ? e.message : String(e) });

@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { envVar } from "../names.js";
 /**
  * Static text embeddings (model2vec, potion-base-8M) in plain TypeScript: a BERT WordPiece
  * tokenizer and one row of a 29,528 x 256 matrix per token, averaged. No native code and no
- * network at search time; the model is fetched once by `temporal-atlas models pull`.
+ * network at search time; the model is fetched once by `varve models pull`.
  */
 export const MODEL = {
     name: "potion-base-8M",
@@ -18,12 +19,15 @@ export const MODEL = {
     },
     licence: "MIT",
 };
-/** Where models are kept: shared by every atlas on the machine, outside the notes. */
+/** Where models are kept: shared by every atlas on the machine, outside the notes. A model pulled before the rename is still used. */
 export function modelsDir(env = process.env) {
-    if (env.TEMPORAL_ATLAS_MODELS)
-        return env.TEMPORAL_ATLAS_MODELS;
+    const set = envVar(env, "MODELS");
+    if (set)
+        return set;
     const base = env.XDG_CACHE_HOME || (process.platform === "win32" && env.LOCALAPPDATA) || join(homedir(), ".cache");
-    return join(base, "temporal-atlas", "models");
+    const current = join(base, "varve", "models");
+    const legacy = join(base, "varve", "models");
+    return !modelInstalled(join(current, MODEL.name)) && modelInstalled(join(legacy, MODEL.name)) ? legacy : current;
 }
 export function modelDir(env = process.env) {
     return join(modelsDir(env), MODEL.name);

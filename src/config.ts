@@ -40,13 +40,13 @@ export interface AtlasConfig extends TimeConfig {
   scrubPatterns: ScrubPattern[];
   /** Transcript text handed to a rollup is cut to this many characters. */
   transcriptMaxChars: number;
-  /** Who writes rollups: the connected agent, or the nightly `temporal-atlas tidy` run. */
+  /** Who writes rollups: the connected agent, or the nightly `varve tidy` run. */
   rollups: "agent" | "nightly";
   /** Mark every new scope isolated, so no project can read another's notes. For people who work for several clients. */
   isolateNewScopes: boolean;
   capture: CaptureConfig;
   tidy: TidyConfig;
-  /** Blend meaning-based matches into search when the embedding model is installed (`temporal-atlas models pull`). */
+  /** Blend meaning-based matches into search when the embedding model is installed (`varve models pull`). */
   semanticSearch: boolean;
 }
 

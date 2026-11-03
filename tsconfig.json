@@ -12,10 +12,10 @@
     "newLine": "lf",
     "types": [
       "node"
-    ]
+    ],
+    "rootDir": "src"
   },
   "include": [
-    "src",
-    "test"
+    "src"
   ]
 }

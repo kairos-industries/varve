@@ -1,5 +1,5 @@
 name: Benchmark result
-description: Share the report from `temporal-atlas bench` on your atlas.
+description: Share the report from `varve bench` on your atlas.
 title: "Benchmark: "
 labels: [benchmark]
 body:
@@ -7,12 +7,12 @@ body:
     attributes:
       value: |
         Thanks for running the benchmark. The report holds numbers only (no note text, no project or note names), but read it before you paste it.
-        Run `temporal-atlas models pull` first so search by meaning is scored too, and add `--sweep`.
+        Run `varve models pull` first so search by meaning is scored too, and add `--sweep`.
   - type: textarea
     id: report
     attributes:
       label: Report
-      description: The JSON from `.atlas/bench/bench-<date>.json`, or the output of `temporal-atlas bench --sweep --json`.
+      description: The JSON from `.atlas/bench/bench-<date>.json`, or the output of `varve bench --sweep --json`.
       render: json
     validations:
       required: true

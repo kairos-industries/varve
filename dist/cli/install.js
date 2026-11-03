@@ -2,14 +2,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline/promises";
-/** Claude Code hook events and the `temporal-atlas hook` argument each one runs. */
+import { NAME } from "../names.js";
+/** Claude Code hook events and the `varve hook` argument each one runs. */
 export const EVENTS = [
     ["SessionStart", "session-start"],
     ["Stop", "stop"],
     ["SessionEnd", "session-end"],
 ];
-/** Matches both `node ".../cli/main.js" --dir "..." hook` and the older `TEMPORAL_ATLAS_DIR=... node ".../cli/main.js" hook`. */
-export const ATLAS_HOOK = /(temporal-atlas|cli[\\/]main\.js)\b.*\shook\b/;
+/** Matches both `node ".../cli/main.js" --dir "..." hook` and the older `VARVE_DIR=... node ".../cli/main.js" hook`, under either name. */
+export const ATLAS_HOOK = /(varve|temporal-atlas|cli[\\/]main\.js)\b.*\shook\b/;
 const isAtlasHook = (e) => e.hooks.some((h) => ATLAS_HOOK.test(h.command));
 /** Codex caps SessionEnd hooks at 3 seconds. */
 export const CODEX_TIMEOUTS = { SessionEnd: 3 };
@@ -47,7 +48,7 @@ export function codexHooksPath(home = homedir()) {
 }
 /** How Codex should start the server, as `codex mcp add` arguments. */
 export function codexMcpArgs(atlasDir, script) {
-    return ["mcp", "add", "temporal-atlas", "--env", `TEMPORAL_ATLAS_DIR=${atlasDir}`, "--", ...serverCommand(script)];
+    return ["mcp", "add", NAME, "--env", `VARVE_DIR=${atlasDir}`, "--", ...serverCommand(script)];
 }
 export const CODEX_TRUST_NOTE = "Codex runs new hooks only after you trust them: open Codex and run /hooks once.";
 /** Write Claude Code settings, keeping the previous file as settings.json.bak. */
@@ -118,6 +119,6 @@ export async function installClaudeCode(opts) {
     writeFileSync(path, `${JSON.stringify(after, null, 2)}\n`);
     console.log(`\nWritten. A backup of the previous file is at ${path}.bak`);
     console.log("\nIf the MCP server is not added yet, run:");
-    console.log(`  claude mcp add temporal-atlas --scope user -e TEMPORAL_ATLAS_DIR=${JSON.stringify(opts.atlasDir)} -- ${serverCommand(opts.script).map((a) => JSON.stringify(a)).join(" ")}`);
+    console.log(`  claude mcp add ${NAME} --scope user -e VARVE_DIR=${JSON.stringify(opts.atlasDir)} -- ${serverCommand(opts.script).map((a) => JSON.stringify(a)).join(" ")}`);
     return true;
 }

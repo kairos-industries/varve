@@ -148,7 +148,7 @@ const SEMANTIC_DEPTH = 50;
 export function search(atlas: Atlas, input: SearchInput, opts: SearchOptions = {}): SearchResult[] {
   const model = opts.embedder ?? (atlas.config.semanticSearch && opts.mode !== "keyword" ? installedEmbedder() : undefined);
   const mode: SearchMode = opts.mode ?? (model ? "hybrid" : "keyword");
-  if (mode !== "keyword" && !model) throw new Error("Search by meaning needs the embedding model. Run `temporal-atlas models pull`.");
+  if (mode !== "keyword" && !model) throw new Error("Search by meaning needs the embedding model. Run `varve models pull`.");
   const keep = (d: { layer: string; first: string; last: string }) =>
     (!input.layer || d.layer === input.layer) && (!input.from || d.last >= input.from) && (!input.to || d.first <= input.to);
   const docs = input.scopes.flatMap((s) => listMarkdown(atlas.paths.scopeDir(s)).map(toDoc)).filter((d): d is Doc => Boolean(d) && keep(d!));
