@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
-    <img alt="Varve: your coding agent's memory of past work, layered by time and by topic. Sessions roll up into day, week, month and year notes." src="docs/assets/hero-light.svg" width="100%">
+    <img alt="Varve: your coding agent's memory of past work, layered by time and by topic. Sessions roll up into day, week, month and year notes. 97% of 400 real questions answered in the top five; 6 ms per search, on your machine." src="docs/assets/hero-light.svg" width="100%">
   </picture>
 </p>
 

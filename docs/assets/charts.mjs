@@ -69,8 +69,15 @@ function mark(x, y, h, t) {
 
 function hero(t) {
   const W = 1200;
-  const H = 410;
+  const H = 470;
   const parts = [];
+  // The same two numbers as the repository's social preview, under a rule.
+  const r = report("author-0.5.0").retrieval.all;
+  parts.push(`<line x1="64" y1="384" x2="${W - 64}" y2="384" stroke="${t.grid}" stroke-width="1"/>`);
+  const stat = (x, value, label) =>
+    `<text x="${x}" y="432" fill="${t.ink2}" font-size="20"><tspan font-size="30" font-weight="700" fill="${t.ink}">${esc(value)}</tspan>  ${esc(label)}</text>`;
+  parts.push(stat(64, pct(r.hybrid.hit5), `of ${r.probes} real questions answered in the top five`));
+  parts.push(stat(640, `${Math.round(r.hybrid.ms)} ms`, "per search, on your machine"));
   parts.push(text(64, 104, "MCP SERVER FOR CLAUDE CODE, CODEX AND ANY MCP CLIENT", { size: 13, fill: t.muted, weight: 600, extra: ` letter-spacing="1.2"` }));
   // The mark stands as tall as the name's capitals.
   parts.push(mark(64, 130, 48, t));
