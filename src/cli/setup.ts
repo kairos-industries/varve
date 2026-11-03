@@ -17,6 +17,7 @@ import {
   settingsPath,
   writeSettings,
 } from "./install.js";
+import { MODEL, modelInstalled, pullModel } from "../embed/index.js";
 import { findOnPath, installNightly } from "./nightly.js";
 
 /**
@@ -33,6 +34,8 @@ export interface SetupDeps {
   claude?: string;
   /** The codex executable, or "" when Codex is not on PATH. */
   codex?: string;
+  /** Fetch the search model; returns false when it is already there. */
+  pullModel?: () => Promise<boolean>;
 }
 
 export function defaultDeps(): SetupDeps {
@@ -52,6 +55,11 @@ export function defaultDeps(): SetupDeps {
     log: (line) => console.log(line),
     home: homedir(),
     platform: process.platform,
+    pullModel: async () => {
+      if (modelInstalled()) return false;
+      await pullModel();
+      return true;
+    },
   };
 }
 
@@ -126,6 +134,7 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
   if (!claude) {
     const [command, ...args] = serverCommand(opts.script);
     log(`\nAdd the server to your agent: command ${JSON.stringify(command)}, args ${JSON.stringify(args)}, env TEMPORAL_ATLAS_DIR=${JSON.stringify(opts.dir)}.`);
+    await offerModel(opts, deps);
     return true;
   }
 
@@ -148,10 +157,34 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
     await installNightly({ atlasDir: opts.dir, script: opts.script, config: loadConfig(opts.dir), yes: true, platform: deps.platform, home: deps.home, log });
   }
 
+  await offerModel(opts, deps);
+
   log(`\nDone. Open a new Claude Code session in any project: the agent gets a brief of past work there.`);
   log(`Check the install any time with: temporal-atlas doctor`);
   log(`Remove it with: temporal-atlas uninstall (your notes stay in ${opts.dir})`);
   return true;
+}
+
+/** Search by meaning needs a 30 MB model from Hugging Face. Asked, never fetched with --yes. */
+async function offerModel(opts: SetupOptions, deps: SetupDeps) {
+  const later = "Search is keyword only for now. To match by meaning too, run: temporal-atlas models pull";
+  if (opts.yes || !deps.pullModel) {
+    deps.log(`\n${later}`);
+    return;
+  }
+  const want = await deps.ask(
+    `\nDownload the search model (${MODEL.name}, about 30 MB, ${MODEL.licence} licence, from Hugging Face)? Search then finds notes by meaning, not only by keyword. It runs on this machine; nothing is sent.`,
+    true,
+  );
+  if (!want) {
+    deps.log(later);
+    return;
+  }
+  try {
+    deps.log((await deps.pullModel()) ? "Search model installed." : "Search model already installed.");
+  } catch (err) {
+    deps.log(`Could not download the search model: ${err instanceof Error ? err.message : String(err)}. ${later}`);
+  }
 }
 
 export async function uninstall(opts: { dir: string; script: string; yes: boolean }, deps: SetupDeps = defaultDeps()): Promise<boolean> {

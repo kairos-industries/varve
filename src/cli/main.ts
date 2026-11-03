@@ -6,6 +6,7 @@ import { Atlas } from "../atlas.js";
 import { CONFIG_FILE, DEFAULT_CONFIG, INIT_KEYS } from "../config.js";
 import { atlasDir, runStdio } from "../server/index.js";
 import { VERSION } from "../version.js";
+import { MODEL, modelDir, modelInstalled, pullModel } from "../embed/index.js";
 import { claudeRunner, tidy, tidyPlan } from "../tidy/index.js";
 import { backfill, formatBackfill } from "./backfill.js";
 import { doctor, formatDoctor } from "./doctor.js";
@@ -40,10 +41,13 @@ Usage:
   temporal-atlas backfill             Record activity for older sessions from their transcripts (no model)
                                         --dry-run            report what would change
                                         --prune              delete headless runs instead of marking them skipped
+  temporal-atlas models pull          Download the search model (${MODEL.name}, about 30 MB, once) so search matches by meaning
+  temporal-atlas models status        Show whether the search model is installed
   temporal-atlas doctor               Check the atlas: backlog, unrecorded sessions, hooks, broken notes
   temporal-atlas hook <event>         Used by the hooks: session-start, stop or session-end, payload on stdin (--client codex for Codex)
 
 Every command takes --dir <path> for the atlas folder instead of $TEMPORAL_ATLAS_DIR.
+Models are kept in $TEMPORAL_ATLAS_MODELS, default ~/.cache/temporal-atlas/models.
 `;
 
 function flag(args: string[], name: string): boolean {
@@ -186,6 +190,19 @@ async function main(argv: string[]) {
     case "uninstall":
       await uninstall({ dir: resolve(atlasDir()), script: fileURLToPath(import.meta.url), yes: flag(rest, "--yes") });
       return;
+    case "models": {
+      const dir = modelDir();
+      if (rest[0] === "pull") {
+        const bytes = await pullModel(dir, fetch, (l) => console.log(l));
+        console.log(bytes ? `Saved ${MODEL.name} (${(bytes / 1e6).toFixed(1)} MB) to ${dir}. Search now matches by meaning too.` : `${MODEL.name} is already installed at ${dir}.`);
+        return;
+      }
+      if (rest[0] === undefined || rest[0] === "status") {
+        console.log(modelInstalled(dir) ? `${MODEL.name} installed at ${dir}. Search matches by keyword and by meaning.` : `No embedding model at ${dir}. Search is keyword only. Run \`temporal-atlas models pull\` (about 30 MB, once).`);
+        return;
+      }
+      throw new Error("Use `models pull` or `models status`.");
+    }
     case "tidy":
       return runTidy(rest);
     case "backfill":

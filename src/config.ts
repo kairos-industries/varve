@@ -46,6 +46,8 @@ export interface AtlasConfig extends TimeConfig {
   isolateNewScopes: boolean;
   capture: CaptureConfig;
   tidy: TidyConfig;
+  /** Blend meaning-based matches into search when the embedding model is installed (`temporal-atlas models pull`). */
+  semanticSearch: boolean;
 }
 
 export const DEFAULT_CONFIG: AtlasConfig = {
@@ -64,6 +66,7 @@ export const DEFAULT_CONFIG: AtlasConfig = {
     generalPaths: ["~/Library/Application Support/Claude", "~/.config/Claude", "~/AppData/Roaming/Claude"],
   },
   tidy: { command: "claude", model: "sonnet", maxTokens: 200000, maxUsd: 2, at: "04:30" },
+  semanticSearch: true,
 };
 
 /** The keys `init` writes into a new atlas.config.json. */

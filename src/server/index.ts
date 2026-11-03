@@ -153,7 +153,7 @@ export function createServer(session: AtlasSession): McpServer {
 
   tool(
     "search",
-    "Keyword search across every note this session can see. Filter by scope, layer (session, day, week, month, year, topic) and date range (YYYY-MM-DD).",
+    "Search every note this session can see, by keyword and, when the embedding model is installed, by meaning (so 'login' finds 'SSO'). Filter by scope, layer (session, day, week, month, year, topic) and date range (YYYY-MM-DD).",
     {
       query: z.string().min(1),
       scope,
@@ -165,7 +165,7 @@ export function createServer(session: AtlasSession): McpServer {
     (a) => {
       const results = session.search(a);
       if (!results.length) return "No matches.";
-      return results.map((r) => `- ${r.note} (${r.layer} ${r.period}, scope ${r.scope}, score ${r.score})\n  ${r.snippet}`).join("\n");
+      return results.map((r) => `- ${r.note} (${r.layer} ${r.period}, scope ${r.scope}, score ${r.score}, matched by ${r.match})\n  ${r.snippet}`).join("\n");
     },
     true,
   );

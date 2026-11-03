@@ -7,7 +7,7 @@ import { type AtlasConfig, isInside, loadConfig } from "./config.js";
 import { scrub } from "./scrub/index.js";
 import { buildBrief } from "./brief.js";
 import { amend, type AmendInput, scanEdits } from "./edits.js";
-import { search } from "./search.js";
+import { search, type SearchOptions } from "./search.js";
 import { mergeScope, rebuildIndexes } from "./scopes/manage.js";
 import { topic, type TopicUpdate, topicScopes } from "./topics.js";
 import { zoom } from "./zoom.js";
@@ -678,9 +678,9 @@ export class AtlasSession {
     return zoom(this.atlas, this.resolveScope(input.scope), input.period);
   }
 
-  search(input: { query: string; scope?: string; layer?: string; from?: string; to?: string; limit?: number }) {
+  search(input: { query: string; scope?: string; layer?: string; from?: string; to?: string; limit?: number }, opts?: SearchOptions) {
     const scopes = input.scope ? [this.resolveScope(input.scope)] : this.visibleScopes();
-    return search(this.atlas, { ...input, scopes });
+    return search(this.atlas, { ...input, scopes }, opts);
   }
 
   amend(input: AmendInput & { scope?: string }) {

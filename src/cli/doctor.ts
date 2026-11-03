@@ -5,6 +5,7 @@ import type { Atlas } from "../atlas.js";
 import { allScopes } from "../periods.js";
 import { pending } from "../rollup/index.js";
 import { isOrphan, isSkipped, parseSession } from "../sessions/note.js";
+import { MODEL, modelDir, modelInstalled } from "../embed/index.js";
 import { EVENTS } from "./install.js";
 import { readNightlyState } from "./nightly.js";
 import { listMarkdown, noteName, readNote } from "../store/note.js";
@@ -29,6 +30,8 @@ export interface DoctorReport {
   hooks?: string[];
   /** The same for Codex, read from ~/.codex/hooks.json. */
   codexHooks?: string[];
+  /** keyword, or hybrid when the embedding model is installed and enabled. */
+  search: "keyword" | "hybrid";
   problems: string[];
   warnings: string[];
 }
@@ -51,7 +54,7 @@ export function installedHooks(settingsPath = join(homedir(), ".claude", "settin
   return found.length ? found : undefined;
 }
 
-export function doctor(atlas: Atlas, opts: { settingsPath?: string; codexHooksPath?: string } = {}): DoctorReport {
+export function doctor(atlas: Atlas, opts: { settingsPath?: string; codexHooksPath?: string; modelDir?: string } = {}): DoctorReport {
   const root = atlas.root;
   const files = listMarkdown(join(root, "scopes")).concat(listMarkdown(join(root, "index")));
   const names = new Set(files.map(noteName));
@@ -146,6 +149,7 @@ export function doctor(atlas: Atlas, opts: { settingsPath?: string; codexHooksPa
     lastScheduled: nightly.lastRunAt,
     hooks,
     codexHooks,
+    search: atlas.config.semanticSearch && modelInstalled(opts.modelDir ?? modelDir()) ? "hybrid" : "keyword",
     problems,
     warnings,
   };
@@ -160,6 +164,7 @@ export function formatDoctor(r: DoctorReport): string {
   if (r.skipped) lines.push(`Sessions skipped by capture (headless runs, empty transcripts): ${r.skipped}`);
   lines.push(`Claude Code hooks: ${r.hooks ? r.hooks.join(", ") : "not installed"}`);
   if (r.codexHooks) lines.push(`Codex hooks: ${r.codexHooks.join(", ")}`);
+  lines.push(r.search === "hybrid" ? `Search: keyword and meaning (${MODEL.name})` : "Search: keyword only (run `temporal-atlas models pull` to match by meaning too)");
   if (r.rollups === "nightly") lines.push(`Rollups: nightly at ${r.tidyAt}; last scheduled run: ${r.lastScheduled ?? "none yet"}; last rollup written: ${r.lastTidy ?? "none yet"}`);
   if (r.openSessions.length) lines.push(`Sessions open for more than 2 days: ${r.openSessions.join(", ")}`);
   if (r.unresolvedLinks.length) lines.push(`Links to notes that do not exist (often topics not yet written): ${r.unresolvedLinks.slice(0, 15).join(", ")}${r.unresolvedLinks.length > 15 ? ", ..." : ""}`);

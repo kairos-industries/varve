@@ -151,6 +151,6 @@ describe("setup with Codex", () => {
     const { d, calls, hooks } = deps(t.root, "");
     await setup({ dir: t.dir, script: "/opt/atlas/dist/cli/main.js", yes: true }, d);
     expect(hooks().hooks.SessionStart[0].hooks[0].command).toContain("--client codex");
-    expect(calls.filter((c) => c[0].includes("codex"))).toHaveLength(0);
+    expect(calls.filter((c) => c[0]!.includes("codex"))).toHaveLength(0);
   });
 });
