@@ -378,7 +378,7 @@ Codex starts its MCP servers without telling them which conversation they serve.
 
 ## 13. Implementation
 
-TypeScript on Node 20 or later. It is installed from the GitHub repository (`npm install -g github:pomess/varve`), not from npm: the package is marked private, and the compiled `dist/` is committed so installing needs no build step. CI checks that `dist/` matches the source.
+TypeScript on Node 20 or later. It is installed from the GitHub repository (`npm install -g github:kairos-industries/varve`), not from npm: the package is marked private, and the compiled `dist/` is committed so installing needs no build step. CI checks that `dist/` matches the source.
 
 Dependencies: `@modelcontextprotocol/sdk`, `zod`, `yaml`, `minisearch`. Tests use `vitest`.
 
@@ -434,7 +434,7 @@ Still open: whether other clients truncate long server `instructions`; whether C
 
 ## 17. Publishing
 
-MIT license. The repository is public at `pomess/varve`, and anyone installs from it with `npm install -g github:pomess/varve`. The package is not published to npm (ADRs 0005 and 0008). The search model is downloaded separately under its own MIT licence and is not in the repository.
+MIT license. The repository is public at `kairos-industries/varve`, and anyone installs from it with `npm install -g github:kairos-industries/varve`. It moved there from `pomess/varve`, which GitHub redirects. The package is not published to npm (ADRs 0005 and 0008). The search model is downloaded separately under its own MIT licence and is not in the repository.
 
 ## 18. What v0.2 changed, and why
 
