@@ -67,7 +67,7 @@ The reports behind these tables are in [docs/benchmark/](benchmark/). The README
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/search-quality-dark.svg">
-    <img alt="Bar chart. Answer in the first five results: 97% on the author's atlas, 83% on 36 held-out hard questions, 75% on all 69 hard questions. Answer as the first result: 87%, 61% and 55%." src="assets/search-quality-light.svg" width="100%">
+    <img alt="Bar chart. Answer in the first five results: 97% on the author's atlas, 83% on 36 held-out hard questions, 75% on all 69 hard questions. Answer as the first result: 83%, 61% and 55%." src="assets/search-quality-light.svg" width="100%">
   </picture>
 </p>
 
