@@ -21,6 +21,8 @@
   <a href="#reference">Reference</a>
 </p>
 
+https://github.com/user-attachments/assets/fa22edaa-e263-48a8-8e9d-aeccfd1f1f81
+
 Your coding agent forgets everything when the session ends. Varve gives it a memory of past work.
 
 It is an MCP server that records what you and your agents do in each session, then summarizes that record into day, week, month and year notes, each shorter than the one below. Across those layers it keeps topic notes of what stays true: dated claims, open items, and the claims they replaced. A new session starts with a brief of the project: what happened yesterday, what was decided last week, what is still open. From there the agent can zoom into any period, read a topic, or search everything that came before.
