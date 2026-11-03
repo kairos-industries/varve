@@ -4,11 +4,23 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { CONFIG_FILE, DEFAULT_CONFIG, INIT_KEYS, loadConfig } from "../config.js";
-import { hookCommand, mergeHooks, readSettings, removeHooks, serverCommand, settingsPath, writeSettings } from "./install.js";
+import {
+  CODEX_TIMEOUTS,
+  CODEX_TRUST_NOTE,
+  codexHooksPath,
+  codexMcpArgs,
+  hookCommand,
+  mergeHooks,
+  readSettings,
+  removeHooks,
+  serverCommand,
+  settingsPath,
+  writeSettings,
+} from "./install.js";
 import { findOnPath, installNightly } from "./nightly.js";
 
 /**
- * One-command install and uninstall for Claude Code: the atlas folder, the MCP server
+ * One-command install and uninstall for Claude Code and Codex: the atlas folder, the MCP server
  * registration, the capture hooks and, if wanted, the nightly tidy.
  */
 
@@ -19,6 +31,8 @@ export interface SetupDeps {
   home: string;
   platform: NodeJS.Platform;
   claude?: string;
+  /** The codex executable, or "" when Codex is not on PATH. */
+  codex?: string;
 }
 
 export function defaultDeps(): SetupDeps {
@@ -58,9 +72,17 @@ export interface SetupOptions {
   nightly?: boolean;
 }
 
+/** Codex is set up when its binary is on PATH or its folder exists (the desktop app keeps the binary inside the app). */
+function findCodex(deps: SetupDeps): { bin?: string; hooks?: string } {
+  const bin = deps.codex ?? findOnPath("codex");
+  const hooks = bin || existsSync(join(deps.home, ".codex")) ? codexHooksPath(deps.home) : undefined;
+  return { bin: bin || undefined, hooks };
+}
+
 export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps()): Promise<boolean> {
   const { log } = deps;
   const claude = deps.claude ?? findOnPath("claude");
+  const codex = findCodex(deps);
   const settings = settingsPath(deps.home);
   log(`Temporal Atlas setup\n`);
   log(`This will:`);
@@ -68,9 +90,10 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
   if (claude) {
     log(`  2. Register the MCP server with Claude Code for your user (claude mcp add --scope user).`);
     log(`  3. Add the capture hooks to ${settings} (a backup goes to settings.json.bak).`);
-  } else {
+  } else if (!codex.hooks) {
     log(`  Claude Code was not found on PATH, so only the atlas is created. Steps for other clients are printed at the end.`);
   }
+  if (codex.hooks) log(`  ${claude ? 4 : 2}. Add the capture hooks to ${codex.hooks}${codex.bin ? " and register the MCP server with Codex" : ""}.`);
   log(`  Nothing is sent anywhere. The atlas is plain Markdown on this machine.\n`);
   if (!opts.yes && !(await deps.ask("Continue?", true))) {
     log("Nothing changed.");
@@ -87,6 +110,18 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
         ));
   initAtlas(opts.dir, existsSync(join(opts.dir, CONFIG_FILE)) && opts.isolate === undefined && opts.yes ? {} : { isolateNewScopes: isolate });
   log(`\nAtlas ready at ${opts.dir}${isolate ? " (new projects start isolated)" : ""}.`);
+
+  if (codex.hooks) {
+    writeSettings(codex.hooks, mergeHooks(readSettings(codex.hooks), hookCommand(opts.dir, opts.script, deps.platform), { client: "codex", timeouts: CODEX_TIMEOUTS }));
+    log(`Codex capture hooks installed in ${codex.hooks}. ${CODEX_TRUST_NOTE}`);
+    if (codex.bin) {
+      deps.exec(codex.bin, ["mcp", "remove", "temporal-atlas"]);
+      const r = deps.exec(codex.bin, codexMcpArgs(opts.dir, opts.script));
+      log(r.ok ? "MCP server registered with Codex." : `Could not register the MCP server with Codex: ${r.out.trim()}`);
+    } else {
+      log(`Codex is not on PATH. Register the MCP server with: codex ${codexMcpArgs(opts.dir, opts.script).map((a) => JSON.stringify(a)).join(" ")}`);
+    }
+  }
 
   if (!claude) {
     const [command, ...args] = serverCommand(opts.script);
@@ -122,8 +157,9 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
 export async function uninstall(opts: { dir: string; script: string; yes: boolean }, deps: SetupDeps = defaultDeps()): Promise<boolean> {
   const { log } = deps;
   const claude = deps.claude ?? findOnPath("claude");
+  const codex = findCodex(deps);
   const settings = settingsPath(deps.home);
-  log("This removes the Temporal Atlas hooks from Claude Code, the MCP server registration and the nightly run.");
+  log("This removes the Temporal Atlas hooks from Claude Code and Codex, the MCP server registrations and the nightly run.");
   log(`Your notes in ${opts.dir} are not touched.\n`);
   if (!opts.yes && !(await deps.ask("Uninstall?", false))) {
     log("Nothing changed.");
@@ -136,6 +172,14 @@ export async function uninstall(opts: { dir: string; script: string; yes: boolea
   if (claude) {
     const r = deps.exec(claude, ["mcp", "remove", "temporal-atlas", "--scope", "user"]);
     log(r.ok ? "MCP server registration removed." : "No MCP server registration to remove.");
+  }
+  if (codex.hooks && existsSync(codex.hooks)) {
+    writeSettings(codex.hooks, removeHooks(readSettings(codex.hooks)));
+    log(`Hooks removed from ${codex.hooks} (backup in hooks.json.bak).`);
+  }
+  if (codex.bin) {
+    const r = deps.exec(codex.bin, ["mcp", "remove", "temporal-atlas"]);
+    log(r.ok ? "Codex MCP server registration removed." : "No Codex MCP server registration to remove.");
   }
   await installNightly({ atlasDir: opts.dir, script: opts.script, config: loadConfig(opts.dir), yes: true, remove: true, platform: deps.platform, home: deps.home, log });
   log(`\nUninstalled. To delete your notes too, delete ${opts.dir}.`);

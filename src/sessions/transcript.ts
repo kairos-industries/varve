@@ -5,8 +5,20 @@ interface Block {
   text?: string;
 }
 
+/** The user or assistant text of one Codex rollout entry: its finished messages. */
+function codexLine(payload: { type?: string; item?: { type?: string; content?: Block[] } }): string | undefined {
+  const item = payload.type === "item_completed" ? payload.item : undefined;
+  if (item?.type !== "UserMessage" && item?.type !== "AgentMessage") return undefined;
+  const text = (item.content ?? [])
+    .filter((b) => b.text)
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+  return text ? `${item.type === "UserMessage" ? "User" : "Assistant"}: ${text}` : undefined;
+}
+
 /**
- * Pull the human-readable conversation out of a Claude Code JSONL transcript,
+ * Pull the human-readable conversation out of a Claude Code or Codex JSONL transcript,
  * dropping tool calls and tool output. Returns "" when the file is missing.
  */
 export function transcriptText(path: string, maxChars: number): string {
@@ -14,10 +26,15 @@ export function transcriptText(path: string, maxChars: number): string {
   const lines: string[] = [];
   for (const raw of readFileSync(path, "utf8").split("\n")) {
     if (!raw.trim()) continue;
-    let entry: { type?: string; message?: { role?: string; content?: string | Block[] } };
+    let entry: { type?: string; payload?: object; message?: { role?: string; content?: string | Block[] } };
     try {
       entry = JSON.parse(raw);
     } catch {
+      continue;
+    }
+    if (entry.payload && typeof entry.payload === "object") {
+      const line = codexLine(entry.payload);
+      if (line) lines.push(line);
       continue;
     }
     if (entry.type !== "user" && entry.type !== "assistant") continue;

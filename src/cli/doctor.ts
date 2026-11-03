@@ -27,6 +27,8 @@ export interface DoctorReport {
   lastScheduled?: string;
   /** Claude Code hook events the atlas hooks are installed for, or undefined when no atlas hook is installed. */
   hooks?: string[];
+  /** The same for Codex, read from ~/.codex/hooks.json. */
+  codexHooks?: string[];
   problems: string[];
   warnings: string[];
 }
@@ -34,7 +36,7 @@ export interface DoctorReport {
 const OPEN_TOO_LONG_MS = 2 * 24 * 3600 * 1000;
 const STALLED_MS = 36 * 3600 * 1000;
 
-/** Which atlas hooks Claude Code runs, read from its settings file. */
+/** Which atlas hooks Claude Code runs, read from its settings file (or Codex, from its hooks.json). */
 export function installedHooks(settingsPath = join(homedir(), ".claude", "settings.json")): string[] | undefined {
   if (!existsSync(settingsPath)) return undefined;
   let hooks: Record<string, { hooks?: { command?: string }[] }[]> | undefined;
@@ -49,7 +51,7 @@ export function installedHooks(settingsPath = join(homedir(), ".claude", "settin
   return found.length ? found : undefined;
 }
 
-export function doctor(atlas: Atlas, opts: { settingsPath?: string } = {}): DoctorReport {
+export function doctor(atlas: Atlas, opts: { settingsPath?: string; codexHooksPath?: string } = {}): DoctorReport {
   const root = atlas.root;
   const files = listMarkdown(join(root, "scopes")).concat(listMarkdown(join(root, "index")));
   const names = new Set(files.map(noteName));
@@ -94,6 +96,7 @@ export function doctor(atlas: Atlas, opts: { settingsPath?: string } = {}): Doct
     return { scope, count: p.items.length, tokens: p.totalTokens, stale: p.items.filter((i) => i.stale).length };
   });
   const hooks = installedHooks(opts.settingsPath);
+  const codexHooks = installedHooks(opts.codexHooksPath ?? join(homedir(), ".codex", "hooks.json"));
   const warnings: string[] = [];
   const backlog = pend.reduce((sum, p) => sum + p.tokens, 0);
   const count = pend.reduce((sum, p) => sum + p.count, 0);
@@ -142,6 +145,7 @@ export function doctor(atlas: Atlas, opts: { settingsPath?: string } = {}): Doct
     lastTidy: lastTidy === undefined ? undefined : atlas.stamp(new Date(lastTidy)),
     lastScheduled: nightly.lastRunAt,
     hooks,
+    codexHooks,
     problems,
     warnings,
   };
@@ -155,6 +159,7 @@ export function formatDoctor(r: DoctorReport): string {
   if (r.orphans.length) lines.push(`Sessions with a transcript but no record: ${r.orphans.length}`);
   if (r.skipped) lines.push(`Sessions skipped by capture (headless runs, empty transcripts): ${r.skipped}`);
   lines.push(`Claude Code hooks: ${r.hooks ? r.hooks.join(", ") : "not installed"}`);
+  if (r.codexHooks) lines.push(`Codex hooks: ${r.codexHooks.join(", ")}`);
   if (r.rollups === "nightly") lines.push(`Rollups: nightly at ${r.tidyAt}; last scheduled run: ${r.lastScheduled ?? "none yet"}; last rollup written: ${r.lastTidy ?? "none yet"}`);
   if (r.openSessions.length) lines.push(`Sessions open for more than 2 days: ${r.openSessions.join(", ")}`);
   if (r.unresolvedLinks.length) lines.push(`Links to notes that do not exist (often topics not yet written): ${r.unresolvedLinks.slice(0, 15).join(", ")}${r.unresolvedLinks.length > 15 ? ", ..." : ""}`);

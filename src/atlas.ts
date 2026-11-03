@@ -37,6 +37,8 @@ export interface RegistryEntry {
   startedAt: string;
   /** Why the hooks are not recording this session, e.g. "headless". */
   ignored?: string;
+  /** Registry key of the MCP session that joined this hook session (Codex, which does not pass its session id to MCP servers). */
+  joined?: string;
 }
 
 type Registry = Record<string, RegistryEntry>;
@@ -370,6 +372,8 @@ export interface HookInput {
 }
 
 const REGISTRY_TTL_MS = 7 * 24 * 3600 * 1000;
+/** How far apart a Codex hook session and an MCP server may start and still be taken for one conversation. */
+const JOIN_WINDOW_MS = 5 * 60 * 1000;
 const CAPTURE_TTL_MS = 60 * 24 * 3600 * 1000;
 
 /** Forget capture progress for conversations untouched for 60 days. */
@@ -412,16 +416,16 @@ export interface CloseInput {
 }
 
 export class AtlasSession {
-  readonly id: string;
+  id: string;
   readonly started: Date;
   scope: string;
-  private readonly key: string;
+  private key: string;
   private path?: string;
   private scopeLocked = false;
   private cwd?: string;
   private transcript?: string;
   private readonly client?: string;
-  private readonly clientSessionId?: string;
+  private clientSessionId?: string;
   private lastDay: string;
   private readonly origin?: { kind: "remote" | "path"; match: string };
 
@@ -459,6 +463,35 @@ export class AtlasSession {
         path: this.path,
       };
     });
+    this.joinCodex();
+  }
+
+  /**
+   * Codex starts its MCP servers without saying which conversation they serve. Join the Codex
+   * hook session that started in the same folder at about the same time, so what the agent logs
+   * and what the hooks capture land in one note. Two Codex conversations started together in one
+   * folder can be paired the wrong way round.
+   */
+  private joinCodex() {
+    if (this.clientSessionId || this.path || !this.cwd) return;
+    const mine = this.key;
+    const peer = this.atlas.updateRegistry((reg) => {
+      const found = Object.entries(reg)
+        .filter(([, e]) => e.client === "codex" && !e.joined && e.cwd === this.cwd && !e.ignored)
+        .filter(([, e]) => Math.abs(new Date(e.startedAt).getTime() - this.started.getTime()) <= JOIN_WINDOW_MS)
+        .sort(([, a], [, b]) => b.startedAt.localeCompare(a.startedAt))[0];
+      if (!found) return undefined;
+      const [key, e] = found;
+      e.joined = mine;
+      delete reg[mine];
+      return { key, entry: { ...e } };
+    });
+    if (!peer) return;
+    this.key = peer.key;
+    this.clientSessionId = peer.key;
+    this.id = peer.entry.id;
+    this.transcript ??= peer.entry.transcript;
+    if (peer.entry.scope) this.scope = peer.entry.scope;
   }
 
   get notePath(): string | undefined {
@@ -468,6 +501,7 @@ export class AtlasSession {
   /** Adopt a note the capture hook created after this server started. */
   private adoptHookNote() {
     if (this.path) return;
+    this.joinCodex();
     const p = this.atlas.readRegistry()[this.key]?.path;
     if (!p || !existsSync(p)) return;
     this.path = p;

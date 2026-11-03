@@ -10,7 +10,7 @@ import { claudeRunner, tidy, tidyPlan } from "../tidy/index.js";
 import { backfill, formatBackfill } from "./backfill.js";
 import { doctor, formatDoctor } from "./doctor.js";
 import { type HookPayload, runHook } from "./hook.js";
-import { installClaudeCode, serverCommand } from "./install.js";
+import { installClaudeCode, installCodex, serverCommand } from "./install.js";
 import { installNightly, readNightlyState, writeNightlyState } from "./nightly.js";
 import { setup, uninstall } from "./setup.js";
 
@@ -26,6 +26,7 @@ Usage:
   temporal-atlas uninstall            Remove the hooks, the MCP registration and the nightly run; keeps your notes
   temporal-atlas init [dir]           Create an atlas (default: $TEMPORAL_ATLAS_DIR or ~/TemporalAtlas)
   temporal-atlas install claude-code  Add the capture hooks to ~/.claude/settings.json (asks first; --yes to skip)
+  temporal-atlas install codex        Add the capture hooks to ~/.codex/hooks.json (asks first; --yes to skip)
   temporal-atlas install nightly      Schedule \`tidy --scheduled\` every night, catching up after the computer was off (asks first; --at HH:MM, --remove)
   temporal-atlas tidy                 Write pending rollups with \`claude -p\`, within a token and dollar budget
                                         --dry-run            show the plan and estimate, write nothing
@@ -40,7 +41,7 @@ Usage:
                                         --dry-run            report what would change
                                         --prune              delete headless runs instead of marking them skipped
   temporal-atlas doctor               Check the atlas: backlog, unrecorded sessions, hooks, broken notes
-  temporal-atlas hook <event>         Used by the hooks: session-start, stop or session-end, payload on stdin
+  temporal-atlas hook <event>         Used by the hooks: session-start, stop or session-end, payload on stdin (--client codex for Codex)
 
 Every command takes --dir <path> for the atlas folder instead of $TEMPORAL_ATLAS_DIR.
 `;
@@ -140,6 +141,7 @@ Connect it to an agent:
   Others:       command ${JSON.stringify(command)}, args ${JSON.stringify(args)}, env TEMPORAL_ATLAS_DIR=${JSON.stringify(dir)}
 
 For automatic capture in Claude Code:  temporal-atlas install claude-code
+For automatic capture in Codex:        temporal-atlas install codex
 To write rollups overnight:            temporal-atlas install nightly`);
 }
 
@@ -164,12 +166,16 @@ async function main(argv: string[]) {
         await installClaudeCode({ atlasDir: resolve(atlasDir()), script, yes });
         return;
       }
+      if (rest[0] === "codex") {
+        await installCodex({ atlasDir: resolve(atlasDir()), script, yes });
+        return;
+      }
       if (rest[0] === "nightly") {
         const dir = resolve(atlasDir());
         await installNightly({ atlasDir: dir, script, config: new Atlas({ dir }).config, at: option(rest, "--at"), yes, remove: flag(rest, "--remove") });
         return;
       }
-      throw new Error("Use `install claude-code` or `install nightly`.");
+      throw new Error("Use `install claude-code`, `install codex` or `install nightly`.");
     }
     case "setup": {
       const dir = resolve(atlasDir());
@@ -192,7 +198,7 @@ async function main(argv: string[]) {
       // A hook must never break the agent: report problems on stderr and exit 0.
       try {
         const raw = readFileSync(0, "utf8");
-        runHook(new Atlas({ dir: atlasDir() }), rest[0] ?? "", raw.trim() ? (JSON.parse(raw) as HookPayload) : {});
+        runHook(new Atlas({ dir: atlasDir() }), rest[0] ?? "", raw.trim() ? (JSON.parse(raw) as HookPayload) : {}, process.env, option(rest, "--client") ?? "claude-code");
       } catch (err) {
         process.stderr.write(`temporal-atlas hook: ${err instanceof Error ? err.message : String(err)}\n`);
       }
