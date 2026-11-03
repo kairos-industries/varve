@@ -21,6 +21,7 @@ function fakeDeps(root: string, answers: boolean[] = []) {
     home,
     platform: "linux",
     claude: "/usr/local/bin/claude",
+    codex: "",
   };
   return { deps, calls, lines, settings: () => JSON.parse(readFileSync(join(home, ".claude", "settings.json"), "utf8")) };
 }

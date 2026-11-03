@@ -1,0 +1,716 @@
+{
+  "benchmark": "temporal-atlas",
+  "version": "0.4.0",
+  "dataset": "fixture",
+  "ranOn": "2026-11-03",
+  "platform": "darwin",
+  "node": "24.20.0",
+  "model": {
+    "name": "potion-base-8M",
+    "revision": "bf8b056651a2c21b8d2565580b8569da283cab23"
+  },
+  "settings": {
+    "minSimilarity": 0.35
+  },
+  "atlas": {
+    "scopes": 3,
+    "sessions": 26,
+    "notes": {
+      "day": 26,
+      "month": 6,
+      "session": 26,
+      "week": 12,
+      "year": 3
+    }
+  },
+  "retrieval": {
+    "dev": {
+      "probes": 33,
+      "keyword": {
+        "hit1": 0.424,
+        "hit5": 0.515,
+        "mrr": 0.485,
+        "hit5Ci": [
+          0.364,
+          0.667
+        ],
+        "mrrCi": [
+          0.33,
+          0.635
+        ],
+        "ms": 5.2
+      },
+      "semantic": {
+        "hit1": 0.394,
+        "hit5": 0.515,
+        "mrr": 0.455,
+        "hit5Ci": [
+          0.333,
+          0.697
+        ],
+        "mrrCi": [
+          0.303,
+          0.621
+        ],
+        "ms": 4.5
+      },
+      "hybrid": {
+        "hit1": 0.485,
+        "hit5": 0.667,
+        "mrr": 0.568,
+        "hit5Ci": [
+          0.515,
+          0.818
+        ],
+        "mrrCi": [
+          0.424,
+          0.715
+        ],
+        "ms": 5.2
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0.084,
+        "ci95": [
+          -0.009,
+          0.175
+        ],
+        "better": 6,
+        "worse": 2
+      }
+    },
+    "dev/dated": {
+      "probes": 1,
+      "keyword": {
+        "hit1": 1,
+        "hit5": 1,
+        "mrr": 1,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          1,
+          1
+        ],
+        "ms": 4.6
+      },
+      "semantic": {
+        "hit1": 1,
+        "hit5": 1,
+        "mrr": 1,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          1,
+          1
+        ],
+        "ms": 4.3
+      },
+      "hybrid": {
+        "hit1": 1,
+        "hit5": 1,
+        "mrr": 1,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          1,
+          1
+        ],
+        "ms": 4.6
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0,
+        "ci95": [
+          0,
+          0
+        ],
+        "better": 0,
+        "worse": 0
+      }
+    },
+    "dev/exact": {
+      "probes": 6,
+      "keyword": {
+        "hit1": 1,
+        "hit5": 1,
+        "mrr": 1,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          1,
+          1
+        ],
+        "ms": 5.4
+      },
+      "semantic": {
+        "hit1": 0.833,
+        "hit5": 0.833,
+        "mrr": 0.833,
+        "hit5Ci": [
+          0.5,
+          1
+        ],
+        "mrrCi": [
+          0.5,
+          1
+        ],
+        "ms": 4.5
+      },
+      "hybrid": {
+        "hit1": 1,
+        "hit5": 1,
+        "mrr": 1,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          1,
+          1
+        ],
+        "ms": 5.1
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0,
+        "ci95": [
+          0,
+          0
+        ],
+        "better": 0,
+        "worse": 0
+      }
+    },
+    "dev/paraphrase": {
+      "probes": 26,
+      "keyword": {
+        "hit1": 0.269,
+        "hit5": 0.385,
+        "mrr": 0.346,
+        "hit5Ci": [
+          0.192,
+          0.577
+        ],
+        "mrrCi": [
+          0.196,
+          0.519
+        ],
+        "ms": 5.2
+      },
+      "semantic": {
+        "hit1": 0.269,
+        "hit5": 0.423,
+        "mrr": 0.346,
+        "hit5Ci": [
+          0.231,
+          0.615
+        ],
+        "mrrCi": [
+          0.192,
+          0.538
+        ],
+        "ms": 4.5
+      },
+      "hybrid": {
+        "hit1": 0.346,
+        "hit5": 0.577,
+        "mrr": 0.452,
+        "hit5Ci": [
+          0.385,
+          0.769
+        ],
+        "mrrCi": [
+          0.301,
+          0.62
+        ],
+        "ms": 5.3
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0.106,
+        "ci95": [
+          -0.011,
+          0.224
+        ],
+        "better": 6,
+        "worse": 2
+      }
+    },
+    "test": {
+      "probes": 36,
+      "keyword": {
+        "hit1": 0.5,
+        "hit5": 0.806,
+        "mrr": 0.614,
+        "hit5Ci": [
+          0.667,
+          0.917
+        ],
+        "mrrCi": [
+          0.481,
+          0.748
+        ],
+        "ms": 5
+      },
+      "semantic": {
+        "hit1": 0.417,
+        "hit5": 0.444,
+        "mrr": 0.431,
+        "hit5Ci": [
+          0.278,
+          0.611
+        ],
+        "mrrCi": [
+          0.278,
+          0.597
+        ],
+        "ms": 4.5
+      },
+      "hybrid": {
+        "hit1": 0.611,
+        "hit5": 0.833,
+        "mrr": 0.713,
+        "hit5Ci": [
+          0.694,
+          0.944
+        ],
+        "mrrCi": [
+          0.589,
+          0.841
+        ],
+        "ms": 5
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0.099,
+        "ci95": [
+          0.009,
+          0.221
+        ],
+        "better": 6,
+        "worse": 3
+      }
+    },
+    "test/dated": {
+      "probes": 4,
+      "keyword": {
+        "hit1": 0.25,
+        "hit5": 0.5,
+        "mrr": 0.333,
+        "hit5Ci": [
+          0,
+          1
+        ],
+        "mrrCi": [
+          0,
+          0.75
+        ],
+        "ms": 4.6
+      },
+      "semantic": {
+        "hit1": 0,
+        "hit5": 0,
+        "mrr": 0,
+        "hit5Ci": [
+          0,
+          0
+        ],
+        "mrrCi": [
+          0,
+          0
+        ],
+        "ms": 4.4
+      },
+      "hybrid": {
+        "hit1": 0.25,
+        "hit5": 0.5,
+        "mrr": 0.333,
+        "hit5Ci": [
+          0,
+          1
+        ],
+        "mrrCi": [
+          0,
+          0.75
+        ],
+        "ms": 4.5
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0,
+        "ci95": [
+          0,
+          0
+        ],
+        "better": 0,
+        "worse": 0
+      }
+    },
+    "test/exact": {
+      "probes": 6,
+      "keyword": {
+        "hit1": 1,
+        "hit5": 1,
+        "mrr": 1,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          1,
+          1
+        ],
+        "ms": 4.9
+      },
+      "semantic": {
+        "hit1": 0.333,
+        "hit5": 0.333,
+        "mrr": 0.333,
+        "hit5Ci": [
+          0,
+          0.667
+        ],
+        "mrrCi": [
+          0,
+          0.667
+        ],
+        "ms": 4.5
+      },
+      "hybrid": {
+        "hit1": 1,
+        "hit5": 1,
+        "mrr": 1,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          1,
+          1
+        ],
+        "ms": 5
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0,
+        "ci95": [
+          0,
+          0
+        ],
+        "better": 0,
+        "worse": 0
+      }
+    },
+    "test/paraphrase": {
+      "probes": 26,
+      "keyword": {
+        "hit1": 0.423,
+        "hit5": 0.808,
+        "mrr": 0.568,
+        "hit5Ci": [
+          0.654,
+          0.923
+        ],
+        "mrrCi": [
+          0.421,
+          0.723
+        ],
+        "ms": 5.1
+      },
+      "semantic": {
+        "hit1": 0.5,
+        "hit5": 0.538,
+        "mrr": 0.519,
+        "hit5Ci": [
+          0.346,
+          0.731
+        ],
+        "mrrCi": [
+          0.346,
+          0.712
+        ],
+        "ms": 4.6
+      },
+      "hybrid": {
+        "hit1": 0.577,
+        "hit5": 0.846,
+        "mrr": 0.705,
+        "hit5Ci": [
+          0.692,
+          0.962
+        ],
+        "mrrCi": [
+          0.568,
+          0.846
+        ],
+        "ms": 5.1
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0.137,
+        "ci95": [
+          0.012,
+          0.274
+        ],
+        "better": 6,
+        "worse": 3
+      }
+    },
+    "dated": {
+      "probes": 5,
+      "keyword": {
+        "hit1": 0.4,
+        "hit5": 0.6,
+        "mrr": 0.467,
+        "hit5Ci": [
+          0.2,
+          1
+        ],
+        "mrrCi": [
+          0.067,
+          0.867
+        ],
+        "ms": 4.6
+      },
+      "semantic": {
+        "hit1": 0.2,
+        "hit5": 0.2,
+        "mrr": 0.2,
+        "hit5Ci": [
+          0,
+          0.6
+        ],
+        "mrrCi": [
+          0,
+          0.6
+        ],
+        "ms": 4.4
+      },
+      "hybrid": {
+        "hit1": 0.4,
+        "hit5": 0.6,
+        "mrr": 0.467,
+        "hit5Ci": [
+          0.2,
+          1
+        ],
+        "mrrCi": [
+          0.067,
+          0.867
+        ],
+        "ms": 4.5
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0,
+        "ci95": [
+          0,
+          0
+        ],
+        "better": 0,
+        "worse": 0
+      }
+    },
+    "exact": {
+      "probes": 12,
+      "keyword": {
+        "hit1": 1,
+        "hit5": 1,
+        "mrr": 1,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          1,
+          1
+        ],
+        "ms": 5
+      },
+      "semantic": {
+        "hit1": 0.583,
+        "hit5": 0.583,
+        "mrr": 0.583,
+        "hit5Ci": [
+          0.333,
+          0.833
+        ],
+        "mrrCi": [
+          0.333,
+          0.833
+        ],
+        "ms": 4.5
+      },
+      "hybrid": {
+        "hit1": 1,
+        "hit5": 1,
+        "mrr": 1,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          1,
+          1
+        ],
+        "ms": 5
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0,
+        "ci95": [
+          0,
+          0
+        ],
+        "better": 0,
+        "worse": 0
+      }
+    },
+    "paraphrase": {
+      "probes": 52,
+      "keyword": {
+        "hit1": 0.346,
+        "hit5": 0.596,
+        "mrr": 0.457,
+        "hit5Ci": [
+          0.462,
+          0.731
+        ],
+        "mrrCi": [
+          0.347,
+          0.588
+        ],
+        "ms": 5.1
+      },
+      "semantic": {
+        "hit1": 0.385,
+        "hit5": 0.481,
+        "mrr": 0.433,
+        "hit5Ci": [
+          0.327,
+          0.615
+        ],
+        "mrrCi": [
+          0.298,
+          0.567
+        ],
+        "ms": 4.5
+      },
+      "hybrid": {
+        "hit1": 0.462,
+        "hit5": 0.712,
+        "mrr": 0.578,
+        "hit5Ci": [
+          0.577,
+          0.827
+        ],
+        "mrrCi": [
+          0.456,
+          0.695
+        ],
+        "ms": 5.2
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0.121,
+        "ci95": [
+          0.033,
+          0.213
+        ],
+        "better": 12,
+        "worse": 5
+      }
+    },
+    "all": {
+      "probes": 69,
+      "keyword": {
+        "hit1": 0.464,
+        "hit5": 0.667,
+        "mrr": 0.552,
+        "hit5Ci": [
+          0.551,
+          0.768
+        ],
+        "mrrCi": [
+          0.442,
+          0.646
+        ],
+        "ms": 5.1
+      },
+      "semantic": {
+        "hit1": 0.406,
+        "hit5": 0.478,
+        "mrr": 0.442,
+        "hit5Ci": [
+          0.377,
+          0.609
+        ],
+        "mrrCi": [
+          0.348,
+          0.565
+        ],
+        "ms": 4.5
+      },
+      "hybrid": {
+        "hit1": 0.551,
+        "hit5": 0.754,
+        "mrr": 0.644,
+        "hit5Ci": [
+          0.652,
+          0.855
+        ],
+        "mrrCi": [
+          0.544,
+          0.741
+        ],
+        "ms": 5.1
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": 0.091,
+        "ci95": [
+          0.032,
+          0.166
+        ],
+        "better": 12,
+        "worse": 5
+      }
+    }
+  },
+  "sweep": {
+    "0.20": {
+      "hit1": 0.565,
+      "hit5": 0.826,
+      "mrr": 0.682
+    },
+    "0.25": {
+      "hit1": 0.536,
+      "hit5": 0.754,
+      "mrr": 0.638
+    },
+    "0.30": {
+      "hit1": 0.565,
+      "hit5": 0.754,
+      "mrr": 0.643
+    },
+    "0.35": {
+      "hit1": 0.551,
+      "hit5": 0.754,
+      "mrr": 0.644
+    },
+    "0.40": {
+      "hit1": 0.507,
+      "hit5": 0.696,
+      "mrr": 0.592
+    },
+    "0.45": {
+      "hit1": 0.478,
+      "hit5": 0.667,
+      "mrr": 0.563
+    }
+  },
+  "brief": {
+    "scopes": 3,
+    "tokensMean": 195,
+    "tokensMax": 219,
+    "ms": 7.4,
+    "todos": 3,
+    "todoRecall": 0
+  }
+}

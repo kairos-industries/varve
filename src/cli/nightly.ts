@@ -8,15 +8,18 @@ import { AtlasPaths } from "../store/paths.js";
 
 export const LABEL = "io.temporal-atlas.tidy";
 
-/** Find an executable on PATH, as `which` would. */
-export function findOnPath(command: string, path = process.env.PATH ?? ""): string | undefined {
-  if (isAbsolute(command)) return existsSync(command) ? command : undefined;
-  for (const dir of path.split(delimiter)) {
-    const full = join(dir, command);
-    try {
-      if (statSync(full).isFile()) return full;
-    } catch {
-      // not here
+/** Find an executable on PATH, as `which` would. On Windows, also tries the PATHEXT extensions (claude.exe, claude.cmd). */
+export function findOnPath(command: string, path = process.env.PATH ?? "", platform: NodeJS.Platform = process.platform): string | undefined {
+  const exts = platform === "win32" ? ["", ...(process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").filter(Boolean)] : [""];
+  const dirs = isAbsolute(command) ? [""] : path.split(delimiter);
+  for (const dir of dirs) {
+    for (const ext of exts) {
+      const full = dir ? join(dir, command + ext) : command + ext;
+      try {
+        if (statSync(full).isFile()) return full;
+      } catch {
+        // not here
+      }
     }
   }
   return undefined;

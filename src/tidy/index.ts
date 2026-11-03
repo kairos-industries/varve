@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync } from "node:fs";
-import { spawn } from "node:child_process";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import spawn from "cross-spawn";
 import { dirname } from "node:path";
 import type { Atlas } from "../atlas.js";
 import { CHILD_ENV } from "../cli/hook.js";
@@ -52,7 +53,7 @@ export function claudeArgs(model: string, maxUsd: number): string[] {
   ];
 }
 
-/** Run each rollup through the Claude Code CLI the user already has signed in. */
+/** Run each rollup through the Claude Code CLI the user already has signed in. cross-spawn also runs a claude.cmd shim on Windows. */
 export function claudeRunner(atlas: Atlas): ModelRunner {
   return (prompt, opts) =>
     new Promise((resolve, reject) => {
@@ -61,7 +62,7 @@ export function claudeRunner(atlas: Atlas): ModelRunner {
         cwd: atlas.paths.stateDir,
         env: { ...process.env, [CHILD_ENV]: "1" },
         stdio: ["pipe", "pipe", "pipe"],
-      });
+      }) as ChildProcessWithoutNullStreams;
       let out = "";
       let err = "";
       const timer = setTimeout(() => child.kill("SIGTERM"), RUN_TIMEOUT_MS);

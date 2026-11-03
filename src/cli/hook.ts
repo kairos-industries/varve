@@ -12,8 +12,11 @@ export const CHILD_ENV = "TEMPORAL_ATLAS_CHILD";
 
 export const HOOK_EVENTS = ["session-start", "stop", "session-end"] as const;
 
-/** Handle one Claude Code hook call. */
-export function runHook(atlas: Atlas, event: string, payload: HookPayload, env: NodeJS.ProcessEnv = process.env) {
+export const CLIENTS = ["claude-code", "codex"] as const;
+
+/** Handle one hook call from Claude Code or Codex, which send the same payload fields. */
+export function runHook(atlas: Atlas, event: string, payload: HookPayload, env: NodeJS.ProcessEnv = process.env, client: string = "claude-code") {
+  if (!(CLIENTS as readonly string[]).includes(client)) throw new Error(`Unknown client "${client}". Use ${CLIENTS.join(" or ")}.`);
   if (!(HOOK_EVENTS as readonly string[]).includes(event)) {
     throw new Error(`Unknown hook event "${event}". Use ${HOOK_EVENTS.join(", ")}.`);
   }
@@ -23,7 +26,7 @@ export function runHook(atlas: Atlas, event: string, payload: HookPayload, env: 
     sessionId: payload.session_id,
     cwd: payload.cwd,
     transcriptPath: payload.transcript_path,
-    client: "claude-code",
+    client,
   };
   switch (event) {
     case "session-start":

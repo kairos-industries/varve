@@ -1,0 +1,40 @@
+name: Benchmark result
+description: Share the report from `temporal-atlas bench` on your atlas.
+title: "Benchmark: "
+labels: [benchmark]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for running the benchmark. The report holds numbers only (no note text, no project or note names), but read it before you paste it.
+        Run `temporal-atlas models pull` first so search by meaning is scored too, and add `--sweep`.
+  - type: textarea
+    id: report
+    attributes:
+      label: Report
+      description: The JSON from `.atlas/bench/bench-<date>.json`, or the output of `temporal-atlas bench --sweep --json`.
+      render: json
+    validations:
+      required: true
+  - type: dropdown
+    id: dataset
+    attributes:
+      label: Dataset
+      options:
+        - My own atlas
+        - My own atlas, paraphrased (--paraphrase)
+        - The fixture (--fixture)
+    validations:
+      required: true
+  - type: textarea
+    id: usage
+    attributes:
+      label: How you use the atlas
+      description: Claude Code, Codex or other; agent or nightly rollups; roughly how many weeks; anything unusual.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Searches that went wrong
+      description: Optional. A search that should have found something and did not, described without client details.

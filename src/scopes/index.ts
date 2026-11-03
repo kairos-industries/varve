@@ -67,7 +67,7 @@ export interface Detection {
 }
 
 /**
- * Pick the scope for a working directory, following the order in DESIGN.md section 3.
+ * Pick the scope for a working directory, following the order in docs/DESIGN.md section 3.
  * Folders inside `generalPaths` (app scratch folders and the like) go to the general scope.
  */
 export function detectScope(cwd: string | undefined, file: ScopesFile, generalPaths: string[] = []): Detection {
@@ -82,7 +82,7 @@ export function detectScope(cwd: string | undefined, file: ScopesFile, generalPa
     if (rule) return { scope: rule.scope, remote, gitRoot };
   }
   const pathRule = file.rules
-    .filter((r) => r.kind === "path" && (dir === r.match || dir.startsWith(`${r.match}/`)))
+    .filter((r) => r.kind === "path" && isInside(dir, [r.match]))
     .sort((a, b) => b.match.length - a.match.length)[0];
   if (pathRule) return { scope: pathRule.scope, remote, gitRoot };
   if (isInside(dir, generalPaths)) return { scope: GENERAL };

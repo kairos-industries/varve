@@ -7,7 +7,7 @@ import { type AtlasConfig, isInside, loadConfig } from "./config.js";
 import { scrub } from "./scrub/index.js";
 import { buildBrief } from "./brief.js";
 import { amend, type AmendInput, scanEdits } from "./edits.js";
-import { search } from "./search.js";
+import { search, type SearchOptions } from "./search.js";
 import { mergeScope, rebuildIndexes } from "./scopes/manage.js";
 import { topic, type TopicUpdate, topicScopes } from "./topics.js";
 import { zoom } from "./zoom.js";
@@ -24,6 +24,8 @@ export interface AtlasOptions {
   dir: string;
   clock?: Clock;
   config?: Partial<AtlasConfig>;
+  /** New session ids; random unless given (the benchmark fixture needs the same names on every run). */
+  sessionIds?: () => string;
 }
 
 export interface RegistryEntry {
@@ -37,6 +39,8 @@ export interface RegistryEntry {
   startedAt: string;
   /** Why the hooks are not recording this session, e.g. "headless". */
   ignored?: string;
+  /** Registry key of the MCP session that joined this hook session (Codex, which does not pass its session id to MCP servers). */
+  joined?: string;
 }
 
 type Registry = Record<string, RegistryEntry>;
@@ -45,11 +49,13 @@ export class Atlas {
   readonly paths: AtlasPaths;
   readonly config: AtlasConfig;
   readonly clock: Clock;
+  readonly newSessionId: () => string;
 
   constructor(opts: AtlasOptions) {
     this.paths = new AtlasPaths(opts.dir);
     this.config = loadConfig(opts.dir, opts.config);
     this.clock = opts.clock ?? systemClock;
+    this.newSessionId = opts.sessionIds ?? newSessionId;
   }
 
   get root(): string {
@@ -171,7 +177,7 @@ export class Atlas {
       const prev = reg[input.sessionId];
       reg[input.sessionId] = {
         ...prev,
-        id: prev?.id ?? known?.id ?? newSessionId(),
+        id: prev?.id ?? known?.id ?? this.newSessionId(),
         path: prev?.path ?? known?.path,
         scope: prev?.scope ?? scope,
         cwd: input.cwd ?? prev?.cwd,
@@ -196,7 +202,7 @@ export class Atlas {
       const prev = reg[input.sessionId];
       reg[input.sessionId] = {
         ...prev,
-        id: prev?.id ?? known?.id ?? newSessionId(),
+        id: prev?.id ?? known?.id ?? this.newSessionId(),
         path: prev?.path ?? known?.path,
         scope: prev?.scope ?? known?.scope ?? this.detect(input.cwd).scope,
         cwd: prev?.cwd ?? input.cwd,
@@ -370,6 +376,8 @@ export interface HookInput {
 }
 
 const REGISTRY_TTL_MS = 7 * 24 * 3600 * 1000;
+/** How far apart a Codex hook session and an MCP server may start and still be taken for one conversation. */
+const JOIN_WINDOW_MS = 5 * 60 * 1000;
 const CAPTURE_TTL_MS = 60 * 24 * 3600 * 1000;
 
 /** Forget capture progress for conversations untouched for 60 days. */
@@ -412,16 +420,16 @@ export interface CloseInput {
 }
 
 export class AtlasSession {
-  readonly id: string;
+  id: string;
   readonly started: Date;
   scope: string;
-  private readonly key: string;
+  private key: string;
   private path?: string;
   private scopeLocked = false;
   private cwd?: string;
   private transcript?: string;
   private readonly client?: string;
-  private readonly clientSessionId?: string;
+  private clientSessionId?: string;
   private lastDay: string;
   private readonly origin?: { kind: "remote" | "path"; match: string };
 
@@ -435,7 +443,7 @@ export class AtlasSession {
     this.client = opts.client;
     this.key = opts.clientSessionId ?? `mcp-${randomBytes(6).toString("hex")}`;
     const fromHook = opts.clientSessionId ? atlas.readRegistry()[opts.clientSessionId] : undefined;
-    this.id = fromHook?.id ?? newSessionId();
+    this.id = fromHook?.id ?? atlas.newSessionId();
     this.cwd = opts.cwd ?? fromHook?.cwd;
     this.transcript = opts.transcript ?? fromHook?.transcript;
     const det = atlas.detect(this.cwd);
@@ -459,6 +467,35 @@ export class AtlasSession {
         path: this.path,
       };
     });
+    this.joinCodex();
+  }
+
+  /**
+   * Codex starts its MCP servers without saying which conversation they serve. Join the Codex
+   * hook session that started in the same folder at about the same time, so what the agent logs
+   * and what the hooks capture land in one note. Two Codex conversations started together in one
+   * folder can be paired the wrong way round.
+   */
+  private joinCodex() {
+    if (this.clientSessionId || this.path || !this.cwd) return;
+    const mine = this.key;
+    const peer = this.atlas.updateRegistry((reg) => {
+      const found = Object.entries(reg)
+        .filter(([, e]) => e.client === "codex" && !e.joined && e.cwd === this.cwd && !e.ignored)
+        .filter(([, e]) => Math.abs(new Date(e.startedAt).getTime() - this.started.getTime()) <= JOIN_WINDOW_MS)
+        .sort(([, a], [, b]) => b.startedAt.localeCompare(a.startedAt))[0];
+      if (!found) return undefined;
+      const [key, e] = found;
+      e.joined = mine;
+      delete reg[mine];
+      return { key, entry: { ...e } };
+    });
+    if (!peer) return;
+    this.key = peer.key;
+    this.clientSessionId = peer.key;
+    this.id = peer.entry.id;
+    this.transcript ??= peer.entry.transcript;
+    if (peer.entry.scope) this.scope = peer.entry.scope;
   }
 
   get notePath(): string | undefined {
@@ -468,6 +505,7 @@ export class AtlasSession {
   /** Adopt a note the capture hook created after this server started. */
   private adoptHookNote() {
     if (this.path) return;
+    this.joinCodex();
     const p = this.atlas.readRegistry()[this.key]?.path;
     if (!p || !existsSync(p)) return;
     this.path = p;
@@ -644,9 +682,9 @@ export class AtlasSession {
     return zoom(this.atlas, this.resolveScope(input.scope), input.period);
   }
 
-  search(input: { query: string; scope?: string; layer?: string; from?: string; to?: string; limit?: number }) {
+  search(input: { query: string; scope?: string; layer?: string; from?: string; to?: string; limit?: number }, opts?: SearchOptions) {
     const scopes = input.scope ? [this.resolveScope(input.scope)] : this.visibleScopes();
-    return search(this.atlas, { ...input, scopes });
+    return search(this.atlas, { ...input, scopes }, opts);
   }
 
   amend(input: AmendInput & { scope?: string }) {

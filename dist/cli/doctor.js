@@ -4,12 +4,13 @@ import { join } from "node:path";
 import { allScopes } from "../periods.js";
 import { pending } from "../rollup/index.js";
 import { isOrphan, isSkipped, parseSession } from "../sessions/note.js";
+import { MODEL, modelDir, modelInstalled } from "../embed/index.js";
 import { EVENTS } from "./install.js";
 import { readNightlyState } from "./nightly.js";
 import { listMarkdown, noteName, readNote } from "../store/note.js";
 const OPEN_TOO_LONG_MS = 2 * 24 * 3600 * 1000;
 const STALLED_MS = 36 * 3600 * 1000;
-/** Which atlas hooks Claude Code runs, read from its settings file. */
+/** Which atlas hooks Claude Code runs, read from its settings file (or Codex, from its hooks.json). */
 export function installedHooks(settingsPath = join(homedir(), ".claude", "settings.json")) {
     if (!existsSync(settingsPath))
         return undefined;
@@ -72,6 +73,7 @@ export function doctor(atlas, opts = {}) {
         return { scope, count: p.items.length, tokens: p.totalTokens, stale: p.items.filter((i) => i.stale).length };
     });
     const hooks = installedHooks(opts.settingsPath);
+    const codexHooks = installedHooks(opts.codexHooksPath ?? join(homedir(), ".codex", "hooks.json"));
     const warnings = [];
     const backlog = pend.reduce((sum, p) => sum + p.tokens, 0);
     const count = pend.reduce((sum, p) => sum + p.count, 0);
@@ -119,6 +121,8 @@ export function doctor(atlas, opts = {}) {
         lastTidy: lastTidy === undefined ? undefined : atlas.stamp(new Date(lastTidy)),
         lastScheduled: nightly.lastRunAt,
         hooks,
+        codexHooks,
+        search: atlas.config.semanticSearch && modelInstalled(opts.modelDir ?? modelDir()) ? "hybrid" : "keyword",
         problems,
         warnings,
     };
@@ -134,6 +138,9 @@ export function formatDoctor(r) {
     if (r.skipped)
         lines.push(`Sessions skipped by capture (headless runs, empty transcripts): ${r.skipped}`);
     lines.push(`Claude Code hooks: ${r.hooks ? r.hooks.join(", ") : "not installed"}`);
+    if (r.codexHooks)
+        lines.push(`Codex hooks: ${r.codexHooks.join(", ")}`);
+    lines.push(r.search === "hybrid" ? `Search: keyword and meaning (${MODEL.name})` : "Search: keyword only (run `temporal-atlas models pull` to match by meaning too)");
     if (r.rollups === "nightly")
         lines.push(`Rollups: nightly at ${r.tidyAt}; last scheduled run: ${r.lastScheduled ?? "none yet"}; last rollup written: ${r.lastTidy ?? "none yet"}`);
     if (r.openSessions.length)

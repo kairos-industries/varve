@@ -6,11 +6,14 @@ import { Atlas } from "../atlas.js";
 import { CONFIG_FILE, DEFAULT_CONFIG, INIT_KEYS } from "../config.js";
 import { atlasDir, runStdio } from "../server/index.js";
 import { VERSION } from "../version.js";
+import { MODEL, modelDir, modelInstalled, pullModel } from "../embed/index.js";
+import { benchFixture, benchOwn, formatReport, ownProbes, paraphrase, paraphraseTokens } from "../bench/index.js";
+import { allScopes } from "../periods.js";
 import { claudeRunner, tidy, tidyPlan } from "../tidy/index.js";
 import { backfill, formatBackfill } from "./backfill.js";
 import { doctor, formatDoctor } from "./doctor.js";
 import { runHook } from "./hook.js";
-import { installClaudeCode, serverCommand } from "./install.js";
+import { installClaudeCode, installCodex, serverCommand } from "./install.js";
 import { installNightly, readNightlyState, writeNightlyState } from "./nightly.js";
 import { setup, uninstall } from "./setup.js";
 const HELP = `temporal-atlas ${VERSION}
@@ -25,6 +28,7 @@ Usage:
   temporal-atlas uninstall            Remove the hooks, the MCP registration and the nightly run; keeps your notes
   temporal-atlas init [dir]           Create an atlas (default: $TEMPORAL_ATLAS_DIR or ~/TemporalAtlas)
   temporal-atlas install claude-code  Add the capture hooks to ~/.claude/settings.json (asks first; --yes to skip)
+  temporal-atlas install codex        Add the capture hooks to ~/.codex/hooks.json (asks first; --yes to skip)
   temporal-atlas install nightly      Schedule \`tidy --scheduled\` every night, catching up after the computer was off (asks first; --at HH:MM, --remove)
   temporal-atlas tidy                 Write pending rollups with \`claude -p\`, within a token and dollar budget
                                         --dry-run            show the plan and estimate, write nothing
@@ -38,10 +42,22 @@ Usage:
   temporal-atlas backfill             Record activity for older sessions from their transcripts (no model)
                                         --dry-run            report what would change
                                         --prune              delete headless runs instead of marking them skipped
+  temporal-atlas models pull          Download the search model (${MODEL.name}, about 30 MB, once) so search matches by meaning
+  temporal-atlas models status        Show whether the search model is installed
+  temporal-atlas bench                How well search and the brief bring back past work, on your atlas (read only, no model)
+                                        --fixture            on the bundled example atlas instead, the same for everyone
+                                        --json               print the report as JSON
+                                        --out <file>         where to save the report (default .atlas/bench/)
+                                        --max <n>            at most this many probes from your atlas (default 200)
+                                        --sweep              also score search at several similarity thresholds
+                                        --paraphrase         have a model reword the queries first (paid; asks first)
+                                          --model <name>       default haiku
+                                          --max-usd <amount>   default 0.25
   temporal-atlas doctor               Check the atlas: backlog, unrecorded sessions, hooks, broken notes
-  temporal-atlas hook <event>         Used by the hooks: session-start, stop or session-end, payload on stdin
+  temporal-atlas hook <event>         Used by the hooks: session-start, stop or session-end, payload on stdin (--client codex for Codex)
 
 Every command takes --dir <path> for the atlas folder instead of $TEMPORAL_ATLAS_DIR.
+Models are kept in $TEMPORAL_ATLAS_MODELS, default ~/.cache/temporal-atlas/models.
 `;
 function flag(args, name) {
     return args.includes(name);
@@ -123,6 +139,50 @@ async function runTidy(args) {
     if (sealed || report.spentUsd > 0)
         ran(`sealed ${sealed}, failed ${failed}, $${report.spentUsd.toFixed(3)}`);
 }
+async function runBench(args) {
+    const json = flag(args, "--json");
+    const show = (r) => console.log(json ? JSON.stringify(r, null, 2) : formatReport(r));
+    const save = (r, fallbackDir) => {
+        const out = option(args, "--out") ?? join(fallbackDir, `bench-${new Date().toISOString().slice(0, 10)}.json`);
+        mkdirSync(join(out, ".."), { recursive: true });
+        writeFileSync(out, `${JSON.stringify(r, null, 2)}\n`);
+        if (!json)
+            console.log(`\nReport saved to ${out}. It holds numbers only: no note text, no project names.`);
+    };
+    if (flag(args, "--fixture")) {
+        const r = benchFixture(undefined, { sweep: flag(args, "--sweep") });
+        show(r);
+        if (option(args, "--out"))
+            save(r, ".");
+        return;
+    }
+    const atlas = new Atlas({ dir: atlasDir() });
+    const reportDir = join(atlas.paths.stateDir, "bench");
+    const max = number(args, "--max", 200);
+    if (!flag(args, "--paraphrase")) {
+        const r = benchOwn(atlas, { max, sweep: flag(args, "--sweep") });
+        show(r);
+        save(r, reportDir);
+        return;
+    }
+    const probes = ownProbes(atlas, allScopes(atlas), max);
+    const model = option(args, "--model") ?? "haiku";
+    const maxUsd = number(args, "--max-usd", 0.25);
+    console.log(`Paraphrasing ${probes.length} queries with ${model} through \`${atlas.config.tidy.command} -p\`: about ${paraphraseTokens(probes)} input tokens, stopped at $${maxUsd.toFixed(2)}.`);
+    console.log("Only the queries are sent (one clause of a logged event, or a summary headline), through your own Claude Code sign-in.");
+    if (!flag(args, "--yes")) {
+        if (!process.stdin.isTTY)
+            throw new Error("Pass --yes to run the paraphrase tier without asking.");
+        if (!(await confirm("Run it? [y/N] "))) {
+            console.log("Nothing sent.");
+            return;
+        }
+    }
+    const rewritten = await paraphrase(probes, claudeRunner(atlas), { model, maxUsd });
+    const r = { ...benchOwn(atlas, { probes: rewritten.probes, dataset: "own-paraphrased", sweep: flag(args, "--sweep") }), paraphrase: { model, costUsd: rewritten.costUsd, rewritten: rewritten.probes.length } };
+    show(r);
+    save(r, reportDir);
+}
 function init(dir) {
     mkdirSync(join(dir, ".atlas"), { recursive: true });
     const config = join(dir, CONFIG_FILE);
@@ -140,6 +200,7 @@ Connect it to an agent:
   Others:       command ${JSON.stringify(command)}, args ${JSON.stringify(args)}, env TEMPORAL_ATLAS_DIR=${JSON.stringify(dir)}
 
 For automatic capture in Claude Code:  temporal-atlas install claude-code
+For automatic capture in Codex:        temporal-atlas install codex
 To write rollups overnight:            temporal-atlas install nightly`);
 }
 async function main(argv) {
@@ -163,12 +224,16 @@ async function main(argv) {
                 await installClaudeCode({ atlasDir: resolve(atlasDir()), script, yes });
                 return;
             }
+            if (rest[0] === "codex") {
+                await installCodex({ atlasDir: resolve(atlasDir()), script, yes });
+                return;
+            }
             if (rest[0] === "nightly") {
                 const dir = resolve(atlasDir());
                 await installNightly({ atlasDir: dir, script, config: new Atlas({ dir }).config, at: option(rest, "--at"), yes, remove: flag(rest, "--remove") });
                 return;
             }
-            throw new Error("Use `install claude-code` or `install nightly`.");
+            throw new Error("Use `install claude-code`, `install codex` or `install nightly`.");
         }
         case "setup": {
             const dir = resolve(atlasDir());
@@ -179,8 +244,23 @@ async function main(argv) {
         case "uninstall":
             await uninstall({ dir: resolve(atlasDir()), script: fileURLToPath(import.meta.url), yes: flag(rest, "--yes") });
             return;
+        case "models": {
+            const dir = modelDir();
+            if (rest[0] === "pull") {
+                const bytes = await pullModel(dir, fetch, (l) => console.log(l));
+                console.log(bytes ? `Saved ${MODEL.name} (${(bytes / 1e6).toFixed(1)} MB) to ${dir}. Search now matches by meaning too.` : `${MODEL.name} is already installed at ${dir}.`);
+                return;
+            }
+            if (rest[0] === undefined || rest[0] === "status") {
+                console.log(modelInstalled(dir) ? `${MODEL.name} installed at ${dir}. Search matches by keyword and by meaning.` : `No embedding model at ${dir}. Search is keyword only. Run \`temporal-atlas models pull\` (about 30 MB, once).`);
+                return;
+            }
+            throw new Error("Use `models pull` or `models status`.");
+        }
         case "tidy":
             return runTidy(rest);
+        case "bench":
+            return runBench(rest);
         case "backfill":
             console.log(formatBackfill(backfill(new Atlas({ dir: atlasDir() }), { dryRun: flag(rest, "--dry-run"), prune: flag(rest, "--prune") })));
             return;
@@ -191,7 +271,7 @@ async function main(argv) {
             // A hook must never break the agent: report problems on stderr and exit 0.
             try {
                 const raw = readFileSync(0, "utf8");
-                runHook(new Atlas({ dir: atlasDir() }), rest[0] ?? "", raw.trim() ? JSON.parse(raw) : {});
+                runHook(new Atlas({ dir: atlasDir() }), rest[0] ?? "", raw.trim() ? JSON.parse(raw) : {}, process.env, option(rest, "--client") ?? "claude-code");
             }
             catch (err) {
                 process.stderr.write(`temporal-atlas hook: ${err instanceof Error ? err.message : String(err)}\n`);

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import type { ScrubPattern } from "./scrub/index.js";
 import type { TimeConfig } from "./time/index.js";
 
@@ -46,6 +46,8 @@ export interface AtlasConfig extends TimeConfig {
   isolateNewScopes: boolean;
   capture: CaptureConfig;
   tidy: TidyConfig;
+  /** Blend meaning-based matches into search when the embedding model is installed (`temporal-atlas models pull`). */
+  semanticSearch: boolean;
 }
 
 export const DEFAULT_CONFIG: AtlasConfig = {
@@ -64,6 +66,7 @@ export const DEFAULT_CONFIG: AtlasConfig = {
     generalPaths: ["~/Library/Application Support/Claude", "~/.config/Claude", "~/AppData/Roaming/Claude"],
   },
   tidy: { command: "claude", model: "sonnet", maxTokens: 200000, maxUsd: 2, at: "04:30" },
+  semanticSearch: true,
 };
 
 /** The keys `init` writes into a new atlas.config.json. */
@@ -95,8 +98,11 @@ export function expandHome(path: string): string {
   return resolve(path.replace(/^~(?=$|[\\/])/, homedir()));
 }
 
-/** True when `dir` is one of `roots` or inside one of them. */
+/** True when `dir` is one of `roots` or inside one of them, with either path separator. */
 export function isInside(dir: string, roots: string[]): boolean {
   const target = resolve(dir);
-  return roots.map(expandHome).some((root) => target === root || target.startsWith(`${root}/`));
+  return roots.map(expandHome).some((root) => {
+    const rel = relative(root, target);
+    return rel === "" || (rel.split(/[\\/]/)[0] !== ".." && !isAbsolute(rel));
+  });
 }

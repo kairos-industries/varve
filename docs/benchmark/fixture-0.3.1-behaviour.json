@@ -1,0 +1,238 @@
+{
+  "note": "0.3.1 search behaviour reproduced with 0.4.0 code: drafts searched, no search model. 0.3.1 itself has no bench command.",
+  "benchmark": "temporal-atlas",
+  "version": "0.4.0",
+  "dataset": "fixture",
+  "ranOn": "2026-11-03",
+  "platform": "darwin",
+  "node": "24.20.0",
+  "model": null,
+  "settings": {
+    "minSimilarity": 0.35
+  },
+  "atlas": {
+    "scopes": 3,
+    "sessions": 26,
+    "notes": {
+      "day": 26,
+      "month": 6,
+      "session": 26,
+      "week": 12,
+      "year": 3
+    }
+  },
+  "retrieval": {
+    "dev": {
+      "probes": 33,
+      "keyword": {
+        "hit1": 0.242,
+        "hit5": 0.485,
+        "mrr": 0.34,
+        "hit5Ci": [
+          0.333,
+          0.636
+        ],
+        "mrrCi": [
+          0.218,
+          0.476
+        ],
+        "ms": 5.7
+      }
+    },
+    "dev/dated": {
+      "probes": 1,
+      "keyword": {
+        "hit1": 0,
+        "hit5": 0,
+        "mrr": 0.125,
+        "hit5Ci": [
+          0,
+          0
+        ],
+        "mrrCi": [
+          0.125,
+          0.125
+        ],
+        "ms": 4.7
+      }
+    },
+    "dev/exact": {
+      "probes": 6,
+      "keyword": {
+        "hit1": 0.5,
+        "hit5": 1,
+        "mrr": 0.681,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          0.431,
+          0.917
+        ],
+        "ms": 5.6
+      }
+    },
+    "dev/paraphrase": {
+      "probes": 26,
+      "keyword": {
+        "hit1": 0.192,
+        "hit5": 0.385,
+        "mrr": 0.269,
+        "hit5Ci": [
+          0.192,
+          0.577
+        ],
+        "mrrCi": [
+          0.145,
+          0.425
+        ],
+        "ms": 5.9
+      }
+    },
+    "test": {
+      "probes": 36,
+      "keyword": {
+        "hit1": 0.472,
+        "hit5": 0.694,
+        "mrr": 0.585,
+        "hit5Ci": [
+          0.528,
+          0.833
+        ],
+        "mrrCi": [
+          0.444,
+          0.722
+        ],
+        "ms": 5.5
+      }
+    },
+    "test/dated": {
+      "probes": 4,
+      "keyword": {
+        "hit1": 0,
+        "hit5": 0.25,
+        "mrr": 0.15,
+        "hit5Ci": [
+          0,
+          0.75
+        ],
+        "mrrCi": [
+          0,
+          0.375
+        ],
+        "ms": 5
+      }
+    },
+    "test/exact": {
+      "probes": 6,
+      "keyword": {
+        "hit1": 1,
+        "hit5": 1,
+        "mrr": 1,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          1,
+          1
+        ],
+        "ms": 5.4
+      }
+    },
+    "test/paraphrase": {
+      "probes": 26,
+      "keyword": {
+        "hit1": 0.423,
+        "hit5": 0.692,
+        "mrr": 0.556,
+        "hit5Ci": [
+          0.5,
+          0.846
+        ],
+        "mrrCi": [
+          0.4,
+          0.71
+        ],
+        "ms": 5.7
+      }
+    },
+    "dated": {
+      "probes": 5,
+      "keyword": {
+        "hit1": 0,
+        "hit5": 0.2,
+        "mrr": 0.145,
+        "hit5Ci": [
+          0,
+          0.6
+        ],
+        "mrrCi": [
+          0.02,
+          0.325
+        ],
+        "ms": 4.7
+      }
+    },
+    "exact": {
+      "probes": 12,
+      "keyword": {
+        "hit1": 0.75,
+        "hit5": 1,
+        "mrr": 0.84,
+        "hit5Ci": [
+          1,
+          1
+        ],
+        "mrrCi": [
+          0.66,
+          1
+        ],
+        "ms": 5.5
+      }
+    },
+    "paraphrase": {
+      "probes": 52,
+      "keyword": {
+        "hit1": 0.308,
+        "hit5": 0.538,
+        "mrr": 0.412,
+        "hit5Ci": [
+          0.404,
+          0.673
+        ],
+        "mrrCi": [
+          0.298,
+          0.534
+        ],
+        "ms": 5.8
+      }
+    },
+    "all": {
+      "probes": 69,
+      "keyword": {
+        "hit1": 0.362,
+        "hit5": 0.594,
+        "mrr": 0.468,
+        "hit5Ci": [
+          0.464,
+          0.696
+        ],
+        "mrrCi": [
+          0.364,
+          0.559
+        ],
+        "ms": 5.6
+      }
+    }
+  },
+  "brief": {
+    "scopes": 3,
+    "tokensMean": 195,
+    "tokensMax": 219,
+    "ms": 8.6,
+    "todos": 3,
+    "todoRecall": 0
+  }
+}

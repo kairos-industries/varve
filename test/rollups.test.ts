@@ -51,7 +51,7 @@ describe("summarize and seal", () => {
     expect(job.sources).toContain("Built the parser work");
 
     const result = s.seal({ period: "2026-10-08", headline: "Parser built", content: short });
-    expect(result.path).toMatch(/scopes\/alpha\/days\/2026\/2026-10-08 alpha\.md$/);
+    expect(result.path).toMatch(/scopes[\\/]alpha[\\/]days[\\/]2026[\\/]2026-10-08 alpha\.md$/);
     const note = t.read("scopes/alpha/days/2026/2026-10-08 alpha.md");
     expect(note).toContain("status: sealed");
     expect(note).toContain("headline: Parser built");

@@ -191,7 +191,7 @@ export function refreshAround(atlas: Atlas, scope: string, days: string[]) {
 
 export function allScopes(atlas: Atlas): string[] {
   return listMarkdown(atlas.paths.scopesRoot())
-    .map((p) => p.slice(atlas.paths.scopesRoot().length + 1).split("/")[0]!)
+    .map((p) => p.slice(atlas.paths.scopesRoot().length + 1).split(/[\\/]/)[0]!)
     .filter((v, i, a) => a.indexOf(v) === i)
     .sort();
 }

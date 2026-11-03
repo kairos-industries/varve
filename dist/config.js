@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 export const DEFAULT_CONFIG = {
     timezone: "local",
     dayBoundary: "04:00",
@@ -17,6 +17,7 @@ export const DEFAULT_CONFIG = {
         generalPaths: ["~/Library/Application Support/Claude", "~/.config/Claude", "~/AppData/Roaming/Claude"],
     },
     tidy: { command: "claude", model: "sonnet", maxTokens: 200000, maxUsd: 2, at: "04:30" },
+    semanticSearch: true,
 };
 /** The keys `init` writes into a new atlas.config.json. */
 export const INIT_KEYS = ["timezone", "dayBoundary", "costGateTokens", "lengthTargets", "briefTokens", "scrubPatterns", "rollups", "isolateNewScopes", "capture", "tidy"];
@@ -42,8 +43,11 @@ export function tokens(text) {
 export function expandHome(path) {
     return resolve(path.replace(/^~(?=$|[\\/])/, homedir()));
 }
-/** True when `dir` is one of `roots` or inside one of them. */
+/** True when `dir` is one of `roots` or inside one of them, with either path separator. */
 export function isInside(dir, roots) {
     const target = resolve(dir);
-    return roots.map(expandHome).some((root) => target === root || target.startsWith(`${root}/`));
+    return roots.map(expandHome).some((root) => {
+        const rel = relative(root, target);
+        return rel === "" || (rel.split(/[\\/]/)[0] !== ".." && !isAbsolute(rel));
+    });
 }
