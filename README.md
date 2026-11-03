@@ -94,6 +94,13 @@ An agent reads several results and can search again in other words, so "in the t
 
 <p align="center">
   <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/search-quality-dark.svg">
+    <img alt="Bar chart. Answer in the first five results: 97% on the author's atlas, 83% on 36 held-out hard questions, 75% on all 69 hard questions. Answer as the first result: 87%, 61% and 55%." src="docs/assets/search-quality-light.svg" width="100%">
+  </picture>
+</p>
+
+<p align="center">
+  <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/by-kind-dark.svg">
     <img alt="Grouped bar chart, answer in the first five results on the hard test. Reworded questions: 54% in 0.3.1, 71% now. Exact names or terms: 100% and 100%. Date ranges: 20% and 60%." src="docs/assets/by-kind-light.svg" width="100%">
   </picture>
@@ -102,12 +109,24 @@ An agent reads several results and can search again in other words, so "in the t
 What the numbers say, and what they don't:
 
 - **Names and exact terms are always found**: 12 of 12 on the hard test.
+- **Adding meaning to keyword search helps.** On the same questions it ranks the answer higher on 12 and lower on 5: +0.09 MRR (0.03 to 0.17) on all questions, +0.10 (0.01 to 0.22) on the held-out ones. Meaning alone is worse than keyword alone, so the two are fused.
 - **Rewording is the weak spot.** Reworded questions found in the top five rose from 54% in 0.3.1 to 71%: search stopped ranking day and week drafts above the sessions they repeat, and matches by meaning were added. The search model is small (30 MB, no native code); a larger one would likely do better here.
 - **Date ranges are too few to judge.** Five questions, three found in the top five.
 - **The hard test is small and written by the author**, so treat it as a regression check. Reports from other people's atlases are the real measure: `varve bench` on your own atlas saves a report that holds numbers only, ready to [share](docs/BENCHMARK.md#send-your-results).
 - **The brief no longer drops todos.** In 0.4 it showed 0% of the todos logged in the last 14 days unless they were in the last session's open threads. 0.5 adds the Open section: 100% on both datasets, for about 20 to 40 more tokens.
 
-Method, mean reciprocal rank with 95% intervals, the threshold sweep, and how to send your results: [BENCHMARK.md](docs/BENCHMARK.md).
+Mean reciprocal rank scores how high the answer ranks: 1.00 when it is always first, 0.50 when it is second on average.
+
+| Mean reciprocal rank (95% interval) | Hard test, all 69 | Hard test, 36 held-out | Real work, 200 |
+|---|---|---|---|
+| 0.3.1, keyword | 0.47 (0.36 to 0.56) | 0.58 (0.44 to 0.72) | |
+| 0.4.0, keyword only | 0.55 (0.44 to 0.65) | 0.61 (0.48 to 0.75) | 0.94 (0.92 to 0.97) |
+| 0.4.0, meaning only | 0.44 (0.35 to 0.56) | 0.43 (0.28 to 0.60) | 0.84 (0.80 to 0.89) |
+| **0.4.0, keyword + meaning (default)** | **0.64 (0.54 to 0.74)** | **0.71 (0.59 to 0.84)** | **0.92 (0.88 to 0.95)** |
+
+Real work was measured with 0.5.0, whose search is the same as 0.4.0's. On it keyword alone scores a little higher than the default, as expected when the questions reuse the notes' words.
+
+Every number, the threshold sweep, and how to send your results: [BENCHMARK.md](docs/BENCHMARK.md).
 
 ## Measured on real work
 
