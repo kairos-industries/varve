@@ -23,10 +23,12 @@ export class Atlas {
     paths;
     config;
     clock;
+    newSessionId;
     constructor(opts) {
         this.paths = new AtlasPaths(opts.dir);
         this.config = loadConfig(opts.dir, opts.config);
         this.clock = opts.clock ?? systemClock;
+        this.newSessionId = opts.sessionIds ?? newSessionId;
     }
     get root() {
         return this.paths.root;
@@ -132,7 +134,7 @@ export class Atlas {
             const prev = reg[input.sessionId];
             reg[input.sessionId] = {
                 ...prev,
-                id: prev?.id ?? known?.id ?? newSessionId(),
+                id: prev?.id ?? known?.id ?? this.newSessionId(),
                 path: prev?.path ?? known?.path,
                 scope: prev?.scope ?? scope,
                 cwd: input.cwd ?? prev?.cwd,
@@ -157,7 +159,7 @@ export class Atlas {
             const prev = reg[input.sessionId];
             reg[input.sessionId] = {
                 ...prev,
-                id: prev?.id ?? known?.id ?? newSessionId(),
+                id: prev?.id ?? known?.id ?? this.newSessionId(),
                 path: prev?.path ?? known?.path,
                 scope: prev?.scope ?? known?.scope ?? this.detect(input.cwd).scope,
                 cwd: prev?.cwd ?? input.cwd,
@@ -311,6 +313,8 @@ const USAGE = `Temporal Atlas is your memory of past work, layered by time: sess
 const AGENT_ROLLUPS = "- If a tool result reports pending rollups, work through them with summarize and seal. Past the cost gate, ask the user first.";
 const NIGHTLY_ROLLUPS = "- Rollups run overnight (temporal-atlas tidy). Do them with summarize and seal only when the user asks.";
 const REGISTRY_TTL_MS = 7 * 24 * 3600 * 1000;
+/** How far apart a Codex hook session and an MCP server may start and still be taken for one conversation. */
+const JOIN_WINDOW_MS = 5 * 60 * 1000;
 const CAPTURE_TTL_MS = 60 * 24 * 3600 * 1000;
 /** Forget capture progress for conversations untouched for 60 days. */
 function pruneCaptures(dir, now) {
@@ -355,7 +359,7 @@ export class AtlasSession {
         this.client = opts.client;
         this.key = opts.clientSessionId ?? `mcp-${randomBytes(6).toString("hex")}`;
         const fromHook = opts.clientSessionId ? atlas.readRegistry()[opts.clientSessionId] : undefined;
-        this.id = fromHook?.id ?? newSessionId();
+        this.id = fromHook?.id ?? atlas.newSessionId();
         this.cwd = opts.cwd ?? fromHook?.cwd;
         this.transcript = opts.transcript ?? fromHook?.transcript;
         const det = atlas.detect(this.cwd);
@@ -379,6 +383,38 @@ export class AtlasSession {
                 path: this.path,
             };
         });
+        this.joinCodex();
+    }
+    /**
+     * Codex starts its MCP servers without saying which conversation they serve. Join the Codex
+     * hook session that started in the same folder at about the same time, so what the agent logs
+     * and what the hooks capture land in one note. Two Codex conversations started together in one
+     * folder can be paired the wrong way round.
+     */
+    joinCodex() {
+        if (this.clientSessionId || this.path || !this.cwd)
+            return;
+        const mine = this.key;
+        const peer = this.atlas.updateRegistry((reg) => {
+            const found = Object.entries(reg)
+                .filter(([, e]) => e.client === "codex" && !e.joined && e.cwd === this.cwd && !e.ignored)
+                .filter(([, e]) => Math.abs(new Date(e.startedAt).getTime() - this.started.getTime()) <= JOIN_WINDOW_MS)
+                .sort(([, a], [, b]) => b.startedAt.localeCompare(a.startedAt))[0];
+            if (!found)
+                return undefined;
+            const [key, e] = found;
+            e.joined = mine;
+            delete reg[mine];
+            return { key, entry: { ...e } };
+        });
+        if (!peer)
+            return;
+        this.key = peer.key;
+        this.clientSessionId = peer.key;
+        this.id = peer.entry.id;
+        this.transcript ??= peer.entry.transcript;
+        if (peer.entry.scope)
+            this.scope = peer.entry.scope;
     }
     get notePath() {
         return this.path;
@@ -387,6 +423,7 @@ export class AtlasSession {
     adoptHookNote() {
         if (this.path)
             return;
+        this.joinCodex();
         const p = this.atlas.readRegistry()[this.key]?.path;
         if (!p || !existsSync(p))
             return;
@@ -562,9 +599,9 @@ export class AtlasSession {
     zoom(input) {
         return zoom(this.atlas, this.resolveScope(input.scope), input.period);
     }
-    search(input) {
+    search(input, opts) {
         const scopes = input.scope ? [this.resolveScope(input.scope)] : this.visibleScopes();
-        return search(this.atlas, { ...input, scopes });
+        return search(this.atlas, { ...input, scopes }, opts);
     }
     amend(input) {
         return amend(this.atlas, this.resolveScope(input.scope), input);

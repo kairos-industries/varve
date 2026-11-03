@@ -1,6 +1,18 @@
 import { existsSync, readFileSync } from "node:fs";
+/** The user or assistant text of one Codex rollout entry: its finished messages. */
+function codexLine(payload) {
+    const item = payload.type === "item_completed" ? payload.item : undefined;
+    if (item?.type !== "UserMessage" && item?.type !== "AgentMessage")
+        return undefined;
+    const text = (item.content ?? [])
+        .filter((b) => b.text)
+        .map((b) => b.text)
+        .join("\n")
+        .trim();
+    return text ? `${item.type === "UserMessage" ? "User" : "Assistant"}: ${text}` : undefined;
+}
 /**
- * Pull the human-readable conversation out of a Claude Code JSONL transcript,
+ * Pull the human-readable conversation out of a Claude Code or Codex JSONL transcript,
  * dropping tool calls and tool output. Returns "" when the file is missing.
  */
 export function transcriptText(path, maxChars) {
@@ -15,6 +27,12 @@ export function transcriptText(path, maxChars) {
             entry = JSON.parse(raw);
         }
         catch {
+            continue;
+        }
+        if (entry.payload && typeof entry.payload === "object") {
+            const line = codexLine(entry.payload);
+            if (line)
+                lines.push(line);
             continue;
         }
         if (entry.type !== "user" && entry.type !== "assistant")

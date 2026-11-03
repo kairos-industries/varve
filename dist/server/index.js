@@ -94,7 +94,7 @@ export function createServer(session) {
         const beneath = z.children.length ? `\n\n## Beneath\n${z.children.map((c) => `- ${c.id} (${c.layer}, ${c.status}): ${c.headline}`).join("\n")}` : "";
         return `# ${z.id} (${z.layer}, ${z.status}, scope ${z.scope})\n\n${z.content}${beneath}\n\nAbove: ${z.parents.join(", ") || "none"}`;
     }, true);
-    tool("search", "Keyword search across every note this session can see. Filter by scope, layer (session, day, week, month, year, topic) and date range (YYYY-MM-DD).", {
+    tool("search", "Search every note this session can see, by keyword and, when the embedding model is installed, by meaning (so 'login' finds 'SSO'). Filter by scope, layer (session, day, week, month, year, topic) and date range (YYYY-MM-DD).", {
         query: z.string().min(1),
         scope,
         layer: z.enum(["session", "day", "week", "month", "year", "topic"]).optional(),
@@ -105,7 +105,7 @@ export function createServer(session) {
         const results = session.search(a);
         if (!results.length)
             return "No matches.";
-        return results.map((r) => `- ${r.note} (${r.layer} ${r.period}, scope ${r.scope}, score ${r.score})\n  ${r.snippet}`).join("\n");
+        return results.map((r) => `- ${r.note} (${r.layer} ${r.period}, scope ${r.scope}, score ${r.score}, matched by ${r.match})\n  ${r.snippet}`).join("\n");
     }, true);
     tool("topic", "Read a topic note (durable knowledge about one subject), or create or update it. Without update it reads. update.state replaces 'What we know now'; update.entry adds a dated timeline line. Similar existing names are offered instead of creating a duplicate unless force is true.", {
         name: z.string().min(1),

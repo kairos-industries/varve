@@ -1,8 +1,11 @@
 /** Set for the `claude -p` runs that `temporal-atlas tidy` starts, so their own hooks record nothing. */
 export const CHILD_ENV = "TEMPORAL_ATLAS_CHILD";
 export const HOOK_EVENTS = ["session-start", "stop", "session-end"];
-/** Handle one Claude Code hook call. */
-export function runHook(atlas, event, payload, env = process.env) {
+export const CLIENTS = ["claude-code", "codex"];
+/** Handle one hook call from Claude Code or Codex, which send the same payload fields. */
+export function runHook(atlas, event, payload, env = process.env, client = "claude-code") {
+    if (!CLIENTS.includes(client))
+        throw new Error(`Unknown client "${client}". Use ${CLIENTS.join(" or ")}.`);
     if (!HOOK_EVENTS.includes(event)) {
         throw new Error(`Unknown hook event "${event}". Use ${HOOK_EVENTS.join(", ")}.`);
     }
@@ -14,7 +17,7 @@ export function runHook(atlas, event, payload, env = process.env) {
         sessionId: payload.session_id,
         cwd: payload.cwd,
         transcriptPath: payload.transcript_path,
-        client: "claude-code",
+        client,
     };
     switch (event) {
         case "session-start":

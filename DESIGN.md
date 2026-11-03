@@ -142,7 +142,7 @@ A session note has one `## <date>` section per segment, each with a summary (goa
 
 ### Activity capture
 
-With the Claude Code hooks installed, the `Stop` hook runs after every turn. It reads only the bytes the transcript gained since the last turn (the offset is kept in `.atlas/capture/`) and rewrites the session's `### Activity` section for each day it touched:
+With the Claude Code or Codex hooks installed, the `Stop` hook runs after every turn. It reads only the bytes the transcript gained since the last turn (the offset is kept in `.atlas/capture/`) and rewrites the session's `### Activity` section for each day it touched:
 
 - the session title Claude Code generated, as the first line,
 - the first three and last five requests a person typed, with times (tool results, injected context and system notices are dropped; slash commands are kept),
@@ -151,6 +151,8 @@ With the Claude Code hooks installed, the `Stop` hook runs after every turn. It 
 - the last reply of the day, and the number of requests and tool calls.
 
 No model is involved. The first turn creates the session note, so a session the agent never logged still has a record, and a day can be summarized from activity alone. The MCP server and the hooks write the same note under a shared lock, so events, summaries and activity sit side by side.
+
+Codex rollouts (`~/.codex/sessions/.../rollout-*.jsonl`) are read into the same record. Finished items arrive as `item_completed` events: `UserMessage` for requests (the attachment list the desktop app puts first is dropped), `AgentMessage` for replies, `CommandExecution` for shell commands (milestones, and files named in `apply_patch` bodies), and `FileChange` for edits. A session whose `session_meta` says it came from `codex exec`, the SDK or a subagent is headless.
 
 A conversation that is reopened or resumed keeps the same Claude Code session id and transcript, and keeps writing to the same note. If more activity lands on a day that is already sealed, the day becomes stale.
 
@@ -250,7 +252,7 @@ When a client connects, the server builds the brief for the detected scope and r
 
 `zoom(period, scope?)` returns a period note and the list of notes beneath it, so the agent can move from a year down to the sessions behind one day.
 
-`search(query, scope?, layer?, from?, to?)` runs a keyword search (MiniSearch, BM25) across every note the current scope can see, with results ranked and grouped by layer.
+`search(query, scope?, layer?, from?, to?)` searches every note the current scope can see, by keyword and, when the search model is installed, by meaning (section 19). Drafts that no person edited are left out: they are assembled from the notes beneath them and would only repeat those notes' matches above them. Each result says whether it matched by keyword, by meaning or both. Ties go to the note name, so the same files always give the same order.
 
 ## 7. Topics
 
@@ -298,7 +300,7 @@ All tools are scoped to the session's scope unless they take a `scope` argument,
 
 The server uses only tools, no MCP resources or prompts, so it behaves the same in every client.
 
-## 10. Claude Code adapter
+## 10. Claude Code and Codex adapters
 
 `temporal-atlas install claude-code` adds three hooks to `~/.claude/settings.json`. It prints the exact change and asks before writing.
 
@@ -309,6 +311,10 @@ The server uses only tools, no MCP resources or prompts, so it behaves the same 
 Each hook runs `node "<path to dist/cli/main.js>" --dir "<atlas folder>" hook <event>`. The folder goes in `--dir` rather than a `TEMPORAL_ATLAS_DIR=` prefix, which cmd and PowerShell cannot read, and paths use forward slashes on Windows.
 
 A hook never fails the agent: errors go to stderr and the hook exits 0.
+
+`temporal-atlas install codex` (and `setup`, when `~/.codex` exists) adds the same three hooks to `~/.codex/hooks.json`, each with `--client codex`. Codex sends the same payload fields (`session_id`, `cwd`, `transcript_path`). Its `SessionEnd` hooks may run for 3 seconds at most, so that one has a 3-second timeout. Codex runs a new hook only after the user trusts it with `/hooks`.
+
+Codex starts its MCP servers without telling them which conversation they serve. When an MCP session has no client session id, it joins the Codex hook session that started in the same folder within five minutes and that no other MCP session has joined (`joined` in the registry). From then on it writes to that session's note, so events and activity sit together. Two Codex conversations started at the same time in one folder can be paired the wrong way round.
 
 ## 11. CLI
 
@@ -359,11 +365,13 @@ src/
   store/      read and write notes, frontmatter, hashes, locks
   scopes/     detection, rules, visibility
   sessions/   lifecycle, segments, events
-  capture/    activity from Claude Code transcripts, read incrementally
+  capture/    activity from Claude Code and Codex transcripts, read incrementally
+  embed/      the search model: WordPiece tokenizer, static embeddings, download
+  bench/      the benchmark and its fixture atlas
   tidy/       rollups through claude -p, budgets, tidy.log
   rollup/     pending list, cost gate, sources, seal, stale propagation
   brief/      brief assembly and token caps
-  search/     index build and query
+  search/     keyword index, embeddings per note, rank fusion
   topics/     topic notes and duplicate check
   scrub/      secret patterns
   server/     MCP tool registration
@@ -380,11 +388,10 @@ The clock is injected everywhere so tests can move time.
 
 ## 15. Scope of v1
 
-In v1: the stdio MCP server, the Claude Code adapter, and the CLI.
+In v1: the stdio MCP server, the Claude Code adapter, and the CLI. 0.4 added the Codex adapter, search by meaning and the benchmark.
 
 Later:
-- Codex adapter (activity capture from Codex transcripts). Codex can already use every tool; it only lacks automatic capture.
-- Optional semantic search.
+- Open todos from earlier sessions in the brief (the benchmark scores this at 0% today).
 - A shared HTTP server so parallel sessions share one process.
 - An optional mode where the server calls a model itself, for users who want rollups without an agent.
 
@@ -398,11 +405,13 @@ Confirmed by 12 days of daily use in Claude Code (CLI and VS Code), October 2026
 - Reopening a VS Code conversation fires `SessionStart` and `SessionEnd` again with the same session id and transcript. v0.1 wrote a new note each time; v0.2 keeps one note per conversation.
 - `claude -p` runs fire the same hooks; their prompts are marked `turnOrigin: sdk`, interactive ones `turnOrigin: human`.
 
-Still open: whether other clients truncate long server `instructions`; Codex hooks and transcript location.
+Confirmed against 288 Codex rollouts (codex-cli 0.166, October 2026): the rollout format in section 4, and that `codex exec` and subagent runs make up most of them (284), all skipped as headless.
+
+Still open: whether other clients truncate long server `instructions`; whether Codex passes a conversation id to MCP servers in a later version, which would replace the five-minute join.
 
 ## 17. Publishing
 
-MIT license. The shared repository is private; colleagues install from it with their GitHub access. The package is not published to npm (ADR 0005).
+MIT license. The repository is public at `pomess/temporal-atlas`, and anyone installs from it with `npm install -g github:pomess/temporal-atlas`. The package is not published to npm (ADRs 0005 and 0008). The search model is downloaded separately under its own MIT licence and is not in the repository.
 
 ## 18. What v0.2 changed, and why
 
@@ -420,3 +429,20 @@ v0.1 ran for 12 days across 20 scopes. 189 sessions were recorded and no period 
 | `doctor` said "No problems found" | It reported counts, not problems | Warnings for the backlog, unrecorded sessions and old hooks |
 
 Rollups still need someone to write them. `tidy` and `install nightly` make that a scheduled job with a budget instead of a request the agent has to remember.
+
+## 19. Search by meaning
+
+The search model is [potion-base-8M](https://huggingface.co/minishlab/potion-base-8M) (model2vec, MIT): a BERT WordPiece vocabulary of 29,528 tokens and one 256-dimensional vector per token. A text's embedding is the mean of its tokens' vectors (unknown tokens dropped, at most 512 tokens), scaled to unit length. That needs no neural network at query time, so it runs in plain TypeScript with no native code (ADR 0006). The tokenizer and the vectors match the reference `model2vec` library to float precision.
+
+`temporal-atlas models pull` downloads `tokenizer.json` and `model.safetensors` (about 30 MB) from a pinned revision into `~/.cache/temporal-atlas/models` (`TEMPORAL_ATLAS_MODELS` to change it), and checks their SHA-256 hashes before saving. `setup` offers it. The server never downloads anything: without the model, search is keyword only, as before.
+
+A note is embedded in pieces: paragraphs and list items, merged up to about 60 words, because one vector for a whole note says little. A note's similarity to a query is that of its best piece. Pieces at or above the similarity threshold (0.35) are ranked, the top 50 are kept, and that list is fused with the BM25 list by reciprocal rank (k = 60). Embeddings are kept in memory for the life of the process and redone when a file changes. The first search in a session embeds every note (about 60 ms for 250 notes); later ones cost about the same as keyword search.
+
+## 20. Benchmark
+
+`temporal-atlas bench` (BENCHMARK.md) scores search (hit@1, hit@5, MRR, in keyword, meaning and both modes) and the brief (tokens, build time, share of recent todos shown). It calls no model and only reads the atlas; its report holds numbers only (ADR 0007).
+
+- `--fixture` builds `src/bench/fixture.ts` (26 invented sessions, 33 questions) in a temporary folder with fixed session ids, so the scores are the same everywhere.
+- Without it, probes come from the user's atlas: logged decisions, findings and changes (known-item search, each in its own scope), and sealed day and week headlines (to find their sources).
+- `--sweep` scores hybrid search at thresholds 0.20 to 0.45, so the default can be chosen from real atlases.
+- `--paraphrase` has a model reword the probe queries, through the user's `claude` CLI, after asking, within `--max-usd`.

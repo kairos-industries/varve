@@ -91,6 +91,113 @@ function day(state, id) {
     state.days[id] ??= { firstAsks: [], lastAsks: [], asks: 0, files: [], milestones: [], toolCalls: 0 };
     return state.days[id];
 }
+function addAsk(d, time, ask) {
+    d.asks++;
+    const item = { time, text: oneLine(ask, ASK_CHARS) };
+    if (d.firstAsks.length < FIRST_ASKS)
+        d.firstAsks.push(item);
+    else
+        d.lastAsks = [...d.lastAsks, item].slice(-LAST_ASKS);
+}
+function addFile(state, d, file) {
+    const shown = state.cwd && isAbsolute(file) && isInside(file, [state.cwd]) ? relative(state.cwd, file).replace(/\\/g, "/") : file;
+    if (!d.files.includes(shown) && d.files.length < MAX_FILES)
+        d.files.push(shown);
+}
+function addCommand(d, time, command) {
+    const m = milestone(command);
+    if (m)
+        d.milestones = [...d.milestones, { time, text: oneLine(m, 160) }].slice(-MAX_MILESTONES);
+}
+/** Files named in an apply_patch body. */
+export function patchFiles(patch) {
+    return [...patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm)].map((m) => m[1].trim());
+}
+/** The shell command of a Codex CommandExecution: ["/bin/zsh", "-lc", "git status"] is "git status". */
+function codexCommand(command) {
+    if (typeof command === "string")
+        return command;
+    if (!command?.length)
+        return "";
+    return command.length >= 3 && /^-\w*c$/.test(command[1]) ? command[2] : command.join(" ");
+}
+/** What the person typed in a Codex user message, without the attachment list the app puts first. */
+export function codexAsk(text) {
+    const request = /## My request:\s*([\s\S]*)$/.exec(text)?.[1] ?? text;
+    return askText({ message: { content: request } });
+}
+/** Fold one Codex rollout entry. Codex reports finished items (messages, commands, file changes) as item_completed events. */
+function absorbCodex(state, kind, p, stamp, config) {
+    if (kind === "session_meta") {
+        // A forked conversation repeats its parent's meta after its own; the first one is this session's.
+        if (state.program === undefined) {
+            state.program = p.thread_source === "subagent" || /exec|sdk/i.test(p.originator ?? "");
+            if (p.cwd)
+                state.cwd = p.cwd;
+        }
+        return;
+    }
+    if (p.cwd)
+        state.cwd = p.cwd;
+    if (!stamp)
+        return;
+    const at = new Date(stamp);
+    if (Number.isNaN(at.getTime()))
+        return;
+    const item = p.type === "item_completed" ? p.item : undefined;
+    const patch = p.type === "custom_tool_call" && p.name === "apply_patch" ? p.input : undefined;
+    if (!item && !patch)
+        return;
+    const d = day(state, dayOf(at, config));
+    const time = wallClock(at, config).time;
+    if (patch) {
+        for (const f of patchFiles(patch))
+            addFile(state, d, f);
+        return;
+    }
+    const text = (item.content ?? [])
+        .filter((b) => b.text && /^(text|input_text|output_text)$/i.test(b.type ?? ""))
+        .map((b) => b.text)
+        .join("\n");
+    switch (item.type) {
+        case "UserMessage": {
+            const ask = codexAsk(text);
+            if (!ask)
+                return;
+            if (state.program)
+                state.programTurns++;
+            else
+                state.humanTurns++;
+            addAsk(d, time, ask);
+            return;
+        }
+        case "AgentMessage":
+            if (text.trim())
+                d.lastReply = { time, text: oneLine(text, REPLY_CHARS) };
+            return;
+        case "CommandExecution": {
+            d.toolCalls++;
+            const command = codexCommand(item.command);
+            addCommand(d, time, command);
+            for (const f of patchFiles(command))
+                addFile(state, d, f);
+            return;
+        }
+        case "FileChange": {
+            d.toolCalls++;
+            const changes = item.changes ?? [];
+            const paths = Array.isArray(changes) ? changes.map((c) => c.path ?? "") : Object.keys(changes);
+            for (const f of paths.filter(Boolean))
+                addFile(state, d, f);
+            return;
+        }
+        case "McpToolCall":
+        case "Extension":
+        case "ImageView":
+        case "WebSearch":
+            d.toolCalls++;
+    }
+}
 /** Fold transcript lines into the capture state. */
 export function absorb(state, lines, config) {
     let stamp = state.stamp;
@@ -102,6 +209,12 @@ export function absorb(state, lines, config) {
             e = JSON.parse(raw);
         }
         catch {
+            continue;
+        }
+        if (e.payload && typeof e.payload === "object") {
+            if (e.timestamp)
+                stamp = e.timestamp;
+            absorbCodex(state, e.type, e.payload, stamp, config);
             continue;
         }
         if (e.type === "ai-title" && e.aiTitle)
@@ -125,12 +238,7 @@ export function absorb(state, lines, config) {
                 state.humanTurns++;
             else if (e.turnOrigin === "sdk")
                 state.programTurns++;
-            d.asks++;
-            const item = { time, text: oneLine(ask, ASK_CHARS) };
-            if (d.firstAsks.length < FIRST_ASKS)
-                d.firstAsks.push(item);
-            else
-                d.lastAsks = [...d.lastAsks, item].slice(-LAST_ASKS);
+            addAsk(d, time, ask);
             continue;
         }
         const blocks = Array.isArray(e.message?.content) ? e.message.content : [];
@@ -143,17 +251,11 @@ export function absorb(state, lines, config) {
             const input = b.input ?? {};
             if (b.name && FILE_TOOLS.has(b.name)) {
                 const file = String(input.file_path ?? input.notebook_path ?? "");
-                if (file) {
-                    const shown = state.cwd && isAbsolute(file) && isInside(file, [state.cwd]) ? relative(state.cwd, file).replace(/\\/g, "/") : file;
-                    if (!d.files.includes(shown) && d.files.length < MAX_FILES)
-                        d.files.push(shown);
-                }
+                if (file)
+                    addFile(state, d, file);
             }
-            if (b.name === "Bash" && typeof input.command === "string") {
-                const m = milestone(input.command);
-                if (m)
-                    d.milestones = [...d.milestones, { time, text: oneLine(m, 160) }].slice(-MAX_MILESTONES);
-            }
+            if (b.name === "Bash" && typeof input.command === "string")
+                addCommand(d, time, input.command);
         }
     }
     state.stamp = stamp;

@@ -17,6 +17,7 @@ export const DEFAULT_CONFIG = {
         generalPaths: ["~/Library/Application Support/Claude", "~/.config/Claude", "~/AppData/Roaming/Claude"],
     },
     tidy: { command: "claude", model: "sonnet", maxTokens: 200000, maxUsd: 2, at: "04:30" },
+    semanticSearch: true,
 };
 /** The keys `init` writes into a new atlas.config.json. */
 export const INIT_KEYS = ["timezone", "dayBoundary", "costGateTokens", "lengthTargets", "briefTokens", "scrubPatterns", "rollups", "isolateNewScopes", "capture", "tidy"];

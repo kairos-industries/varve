@@ -40,7 +40,8 @@ describe("benchmark", () => {
     expect(r.model).toBeNull();
     expect(r.retrieval.all!.hybrid).toBeUndefined();
     expect(withoutMs(benchFixture(undefined).retrieval)).toEqual(withoutMs(r.retrieval));
-  });
+    // Building the fixture twice writes about 50 notes through the real code path; Windows CI is slow at that.
+  }, 60_000);
 
   it("builds probes from logged events, each searched in its own scope", () => {
     const t = worked();

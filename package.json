@@ -1,6 +1,6 @@
 {
   "name": "temporal-atlas",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "description": "Time-layered memory for AI agents, served over MCP",
   "license": "MIT",
@@ -25,7 +25,9 @@
     "memory",
     "agents",
     "obsidian",
-    "claude-code"
+    "claude-code",
+    "codex",
+    "semantic-search"
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
