@@ -27,7 +27,9 @@ It is an MCP server that records what you and your agents do in each session, th
 
 Everything lives in one folder of plain Markdown, the atlas. Open it in Obsidian, edit it by hand, keep it in git.
 
-<sub>A varve is one year's layer of sediment at the bottom of a lake; geologists read time by counting them. Varve was called Temporal Atlas until 0.5, and the old command still works.</sub>
+**Why not CLAUDE.md or a memory file?** Those hold what you or the agent decided to write down: instructions and standing facts. Varve holds what happened, recorded on its own after every turn: dated, kept per project, summarized so the brief stays small however long the history (about 1,000 tokens on average on the author's atlas, 1,700 at most), and searchable when the agent needs more. Claude Code and Codex share the same atlas. The two work together: a memory file says how to work, Varve says what was done and what is still open.
+
+<sub>A varve is one year's layer of sediment at the bottom of a lake; geologists read time by counting them.</sub>
 
 <table>
 <tr>
@@ -129,9 +131,9 @@ Real work was measured with 0.5.0, whose search is the same as 0.4.0's. On it ke
 
 Every number, the threshold sweep, and how to send your results: [BENCHMARK.md](docs/BENCHMARK.md).
 
-## Measured on real work
+## Size and cost: the first 12 days
 
-From the author's own atlas: 12 days of daily use (8 to 20 October 2026) across 11 scopes and 57 recorded conversations.
+From the first 12 days of the author's own atlas (8 to 20 October 2026, before the benchmark above): 11 scopes and 57 recorded conversations.
 
 | Measure | Result |
 |---|---|
@@ -142,7 +144,7 @@ From the author's own atlas: 12 days of daily use (8 to 20 October 2026) across 
 | Brief for the busiest project | about 1,600 tokens, built in under 100 ms |
 | Model calls made by the MCP server | 0 |
 | Day and week summaries written by `tidy` (Sonnet, 6 rollups) | 6 of 6 sealed, $0.13 in total |
-| Test suite | 160 tests on macOS, Linux and Windows, none call a model |
+| Test suite today | 161 tests on macOS, Linux and Windows, none call a model |
 
 Token counts are estimated at 4 characters per token, the same rule the server uses for its cost gate. Version 0.2 came out of these 12 days: see [what changed and why](docs/DESIGN.md#18-what-v02-changed-and-why).
 
@@ -305,7 +307,7 @@ npm install -g github:pomess/varve          # latest
 npm install -g github:pomess/varve#v0.4.0   # a tagged version
 ```
 
-From 0.4, run `varve setup` again: it registers the MCP server as `varve` (replacing `temporal-atlas`) and rewrites the hooks. The `temporal-atlas` command, `TEMPORAL_ATLAS_*` variables and an existing `~/TemporalAtlas` folder keep working. From 0.3, run `varve models pull` for search by meaning and `varve install codex` if you use Codex. From 0.2, also run `varve install claude-code` and, if you use the nightly run, `varve install nightly`. `doctor` tells you when either is needed. From 0.1, run `varve backfill --dry-run`, then without `--dry-run`, to record older sessions from their transcripts.
+From an earlier version, run `varve setup` again, then `varve doctor`, which names anything else to run. Varve was called Temporal Atlas until 0.5: setup replaces the `temporal-atlas` MCP registration, and the old command, `TEMPORAL_ATLAS_*` variables and an existing `~/TemporalAtlas` folder keep working.
 
 The package is installed straight from GitHub and is not on the npm registry. To work on it:
 
