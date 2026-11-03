@@ -48,7 +48,7 @@ Every score comes with a 95% bootstrap interval (2,000 resamples, fixed seed, so
 - **exact** questions look up a name or term (`VIES`, `LaunchDarkly`, `guideline 5.1.1`).
 - **dated** questions are vague queries with a date range.
 
-The dev paraphrases avoid every distinctive word of their target note. The test paraphrases were written later and less strictly, and share more words with their notes: keyword search finds 81% of them in the top five, against 39% of the dev ones. Both splits are in [src/bench/fixture.ts](src/bench/fixture.ts).
+The dev paraphrases avoid every distinctive word of their target note. The test paraphrases were written later and less strictly, and share more words with their notes: keyword search finds 81% of them in the top five, against 39% of the dev ones. Both splits are in [src/bench/fixture.ts](../src/bench/fixture.ts).
 
 **Your atlas.** Probes come from what is already there:
 
@@ -61,7 +61,7 @@ At most 200 probes are used (`--max`), sampled across the whole atlas.
 
 ## Results
 
-The reports behind these tables are in [docs/benchmark/](docs/benchmark/). The README figures are drawn from them by `npm run charts`.
+The reports behind these tables are in [docs/benchmark/](benchmark/). The README figures are drawn from them by `npm run charts`.
 
 ### Fixture
 
@@ -107,7 +107,7 @@ Threshold sweep, hybrid, all 69 questions:
 
 0.20 scores best here, but the fixture has only 26 sessions. On a large atlas a low threshold lets weak matches by meaning into nearly every result list, a cost the fixture can't show. The default stays at 0.35 until sweeps from real atlases say otherwise.
 
-Brief, 0.4.0: 195 tokens on average; todos from the last 14 days shown: **0 of 3**. 0.5.0 adds the Open section: 216 tokens on average, **3 of 3** shown. Search scores are the same in 0.5.0 ([fixture-0.5.0.json](docs/benchmark/fixture-0.5.0.json)).
+Brief, 0.4.0: 195 tokens on average; todos from the last 14 days shown: **0 of 3**. 0.5.0 adds the Open section: 216 tokens on average, **3 of 3** shown. Search scores are the same in 0.5.0 ([fixture-0.5.0.json](benchmark/fixture-0.5.0.json)).
 
 ### The author's atlas
 
@@ -121,7 +121,7 @@ Brief, 0.4.0: 195 tokens on average; todos from the last 14 days shown: **0 of 3
 
 As expected for known-item probes, keyword search is near the ceiling, and fusing in matches by meaning costs a little. The threshold sweep moves MRR by no more than 0.01 between 0.20 and 0.45.
 
-Brief, 0.4.0: 901 tokens on average across 9 scopes with recent work, 1,423 at most, built in 5 ms; todos from the last 14 days shown: **0 of 4**. 0.5.0: 939 tokens on average, **4 of 4** shown ([author-0.5.0.json](docs/benchmark/author-0.5.0.json)).
+Brief, 0.4.0: 901 tokens on average across 9 scopes with recent work, 1,423 at most, built in 5 ms; todos from the last 14 days shown: **0 of 4**. 0.5.0: 939 tokens on average, **4 of 4** shown ([author-0.5.0.json](benchmark/author-0.5.0.json)).
 
 ## What the results say so far
 

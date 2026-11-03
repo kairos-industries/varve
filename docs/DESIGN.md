@@ -463,7 +463,7 @@ A note is embedded in pieces: paragraphs and list items, merged up to about 60 w
 
 ## 20. Benchmark
 
-`varve bench` ([BENCHMARK.md](../BENCHMARK.md)) scores search (hit@1, hit@5, MRR, in keyword, meaning and both modes) and the brief (tokens, build time, share of recent todos shown). It calls no model and only reads the atlas; its report holds numbers only (ADR 0007).
+`varve bench` ([BENCHMARK.md](BENCHMARK.md)) scores search (hit@1, hit@5, MRR, in keyword, meaning and both modes) and the brief (tokens, build time, share of recent todos shown). It calls no model and only reads the atlas; its report holds numbers only (ADR 0007).
 
 - `--fixture` builds `src/bench/fixture.ts` (26 invented sessions, 69 questions: 33 dev, seen while choosing the defaults, and 36 held out) in a temporary folder with fixed session ids, so the scores are the same everywhere.
 - Every score has a 95% bootstrap interval (fixed seed), and hybrid is compared with keyword search probe by probe.

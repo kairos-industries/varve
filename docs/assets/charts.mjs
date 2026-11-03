@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Draws the README figures from the benchmark reports in docs/benchmark/, in a light and a
-// dark version each, into docs/assets/. Run after updating a report: node scripts/charts.mjs
+// dark version each, into docs/assets/. Run after updating a report: node docs/assets/charts.mjs
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const report = (name) => JSON.parse(readFileSync(join(root, "docs", "benchmark", `${name}.json`), "utf8"));
 const out = join(root, "docs", "assets");
 mkdirSync(out, { recursive: true });

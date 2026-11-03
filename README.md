@@ -188,7 +188,7 @@ The brief carries the result: an **Open** section (open items from topics, and t
 
 ## Benchmark
 
-`varve bench` measures how well the atlas brings back past work. It calls no model and only reads the atlas. On the bundled fixture (26 invented sessions in three projects, 69 hand-written questions) every machine gets the same scores. On your own atlas it saves a report that holds numbers only, ready to [share](BENCHMARK.md#send-your-results).
+`varve bench` measures how well the atlas brings back past work. It calls no model and only reads the atlas. On the bundled fixture (26 invented sessions in three projects, 69 hand-written questions) every machine gets the same scores. On your own atlas it saves a report that holds numbers only, ready to [share](docs/BENCHMARK.md#send-your-results).
 
 <p align="center">
   <picture>
@@ -219,7 +219,7 @@ What the numbers say, and what they don't:
 - **On the author's own atlas** (126 sessions, known-item probes) keyword search already scores 0.94 MRR and fusing in meaning costs a little (0.92).
 - **The brief no longer drops todos.** In 0.4 it showed 0% of the todos logged in the last 14 days unless they were in the last session's open threads. 0.5 adds the Open section: 100% on the fixture and on the author's atlas, for about 20 to 40 more tokens.
 
-Method, every number, and how to send your own results: [BENCHMARK.md](BENCHMARK.md).
+Method, every number, and how to send your own results: [BENCHMARK.md](docs/BENCHMARK.md).
 
 ## Measured on real work
 
@@ -485,7 +485,7 @@ npm run compile    # rebuilds dist/, which is committed
 
 Tests use a fake clock, so they cover day boundaries, ISO weeks at year ends and sessions spanning several days without waiting. Integration tests start the real server and drive it through the MCP SDK client. Changes to search or the brief come with before and after scores from `varve bench --fixture`.
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before sending a change, [docs/DESIGN.md](docs/DESIGN.md) for the full design, [docs/CONTEXT.md](docs/CONTEXT.md) for the vocabulary, and [docs/adr/](docs/adr/) for the decisions behind it. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+Read [CONTRIBUTING.md](.github/CONTRIBUTING.md) before sending a change, [docs/DESIGN.md](docs/DESIGN.md) for the full design, [docs/CONTEXT.md](docs/CONTEXT.md) for the vocabulary, and [docs/adr/](docs/adr/) for the decisions behind it. Changes are listed in [CHANGELOG.md](docs/CHANGELOG.md).
 
 ## License
 
