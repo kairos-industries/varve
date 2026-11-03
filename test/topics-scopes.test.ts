@@ -87,6 +87,40 @@ describe("scope management", () => {
     expect(s.summarize({ period: "2026-10-08" }).sources).toContain("Beta work");
     expect(t.atlas.session({ cwd: t.cwd("beta") }).scope).toBe("alpha");
   });
+
+  it("rewrites links to the period notes it renames, without counting that as a person's edit", () => {
+    const t = setup("2026-10-08T10:00:00+02:00");
+    const b = t.atlas.session({ cwd: t.cwd("beta") });
+    b.log({ type: "decision", text: "Keep the ledger in Postgres." });
+    b.closeSession({ headline: "Beta work", summary: "b" });
+    t.at("2026-10-13T09:00:00+02:00");
+    const s = t.atlas.session({ cwd: t.cwd("beta") });
+    s.seal({ period: "2026-10-08", headline: "Beta day", content: "b" });
+    s.seal({ period: "2026-W41", headline: "Beta week", content: "Built on [[2026-10-08 beta]]." });
+    s.topic({ name: "Ledger", update: { entry: "Decided on [[2026-10-08 beta|Thursday]]." } });
+
+    s.scopes({ set: { scope: "beta", mergeInto: "gamma" } });
+    const all = t.files().map((f) => t.read(f)).join("\n");
+    expect(all).not.toMatch(/\[\[[^\]]* beta(\|[^\]]*)?\]\]/);
+    expect(t.read("scopes/gamma/weeks/2026/2026-W41 gamma.md")).toContain('"[[2026-10-08 gamma]]"');
+    expect(t.read("scopes/gamma/weeks/2026/2026-W41 gamma.md")).toContain("Built on [[2026-10-08 gamma]].");
+    expect(t.read("scopes/gamma/topics/Ledger.md")).toContain("[[2026-10-08 gamma|Thursday]]");
+    // The week is still sealed and nothing above it went stale.
+    expect(t.atlas.session({ cwd: t.cwd("beta") }).pending().items.filter((i) => i.stale)).toEqual([]);
+  });
+
+  it("maps only the folders that belonged to the merged scope, not sessions moved into it", () => {
+    const t = setup("2026-10-08T10:00:00+02:00");
+    t.atlas.session({ cwd: t.cwd("beta") }).closeSession({ headline: "Beta work", summary: "b" });
+    // Started in alpha's folder, then filed under beta by hand.
+    const moved = t.atlas.session({ cwd: t.cwd("alpha") });
+    moved.log({ type: "note", text: "This is beta work.", scope: "beta" });
+    moved.closeSession({ headline: "Beta prep from alpha", summary: "b" });
+
+    t.atlas.session({ cwd: t.cwd("client-x") }).scopes({ set: { scope: "beta", mergeInto: "gamma" } });
+    expect(t.atlas.session({ cwd: t.cwd("beta") }).scope).toBe("gamma");
+    expect(t.atlas.session({ cwd: t.cwd("alpha") }).scope).toBe("alpha");
+  });
 });
 
 describe("day change during a session", () => {
