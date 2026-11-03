@@ -21,7 +21,7 @@
   <a href="#reference">Reference</a>
 </p>
 
-https://github.com/user-attachments/assets/fa22edaa-e263-48a8-8e9d-aeccfd1f1f81
+https://github.com/user-attachments/assets/d483ee6e-d5b9-4531-af3f-98788f8e92e7
 
 Your coding agent forgets everything when the session ends. Varve gives it a memory of past work.
 
