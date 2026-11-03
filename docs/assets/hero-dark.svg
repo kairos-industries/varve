@@ -1,7 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="410" viewBox="0 0 1200 410" role="img" aria-label="Varve: sessions roll up into day, week, month and year notes, each shorter than the one below" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
 <rect width="1200" height="410" rx="12" fill="#1a1a19"/>
 <text x="64" y="104" font-size="13" font-weight="600" fill="#898781" text-anchor="start" letter-spacing="1.2">MCP SERVER FOR CLAUDE CODE, CODEX AND ANY MCP CLIENT</text>
-<text x="60" y="178" font-size="68" font-weight="700" fill="#f0efec" text-anchor="start" letter-spacing="-1.5">Varve</text>
+<rect x="64" y="130.0" width="56.3" height="9.8" rx="2.6" fill="#b7d3f6"/>
+<rect x="64" y="142.8" width="56.3" height="9.8" rx="2.6" fill="#6da7ec"/>
+<rect x="64" y="155.5" width="56.3" height="9.8" rx="2.6" fill="#3987e5"/>
+<rect x="64" y="168.3" width="56.3" height="9.8" rx="2.6" fill="#256abf"/>
+<text x="136" y="178" font-size="68" font-weight="700" fill="#f0efec" text-anchor="start" letter-spacing="-1.5">Varve</text>
 <text x="64" y="228" font-size="24" font-weight="400" fill="#c3c2b7" text-anchor="start">Your coding agent's memory of past work,</text>
 <text x="64" y="260" font-size="24" font-weight="400" fill="#c3c2b7" text-anchor="start">layered by time and by topic.</text>
 <text x="64" y="324" font-size="15" font-weight="400" fill="#898781" text-anchor="start">Plain Markdown on your disk  ·  no API key  ·  no cloud</text>

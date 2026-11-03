@@ -57,6 +57,14 @@ ${body}
 `;
 }
 
+/** The Varve mark: four strata, year on top to day at the bottom, `h` tall with its top-left at x, y. */
+function mark(x, y, h, t) {
+  const s = h / 128;
+  return [4, 3, 2, 1]
+    .map((layer, i) => `<rect x="${x}" y="${(y + i * 34 * s).toFixed(1)}" width="${(150 * s).toFixed(1)}" height="${(26 * s).toFixed(1)}" rx="${(7 * s).toFixed(1)}" fill="${t.layers[layer]}"/>`)
+    .join("\n");
+}
+
 // ---- hero: the five layers over four weeks ----
 
 function hero(t) {
@@ -64,7 +72,9 @@ function hero(t) {
   const H = 410;
   const parts = [];
   parts.push(text(64, 104, "MCP SERVER FOR CLAUDE CODE, CODEX AND ANY MCP CLIENT", { size: 13, fill: t.muted, weight: 600, extra: ` letter-spacing="1.2"` }));
-  parts.push(text(60, 178, "Varve", { size: 68, fill: t.ink, weight: 700, extra: ` letter-spacing="-1.5"` }));
+  // The mark stands as tall as the name's capitals.
+  parts.push(mark(64, 130, 48, t));
+  parts.push(text(136, 178, "Varve", { size: 68, fill: t.ink, weight: 700, extra: ` letter-spacing="-1.5"` }));
   parts.push(text(64, 228, "Your coding agent's memory of past work,", { size: 24, fill: t.ink2 }));
   parts.push(text(64, 260, "layered by time and by topic.", { size: 24, fill: t.ink2 }));
   parts.push(text(64, 324, "Plain Markdown on your disk  ·  no API key  ·  no cloud", { size: 15, fill: t.muted }));
