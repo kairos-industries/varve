@@ -1,5 +1,7 @@
 # Contributing
 
+Changes come in as pull requests. Fork the repository, push your branch to your fork, and open a pull request against `main`. The maintainer reviews it, and merges it once it is ready and CI passes. Only the maintainer can push to this repository; the first CI run of a new contributor's pull request waits for the maintainer's approval.
+
 ## Setup
 
 ```sh

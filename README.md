@@ -15,9 +15,9 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
-  <a href="#what-your-agent-sees">What your agent sees</a> ·
-  <a href="#how-it-works">How it works</a> ·
   <a href="#benchmark">Benchmark</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#what-your-agent-sees">What your agent sees</a> ·
   <a href="#reference">Reference</a>
 </p>
 
@@ -68,58 +68,63 @@ varve uninstall   # remove hooks, MCP registrations and the nightly run; your no
 
 `setup --yes` takes the defaults without asking and skips the download. `setup --dir <path>` puts the atlas somewhere else, for example `--dir ~/MyVault/Atlas` inside an Obsidian vault. The server writes only inside that folder.
 
-## What your agent sees
+## Benchmark
 
-At the start of every session the agent receives a brief of its project. A shortened example:
+`varve bench` measures how often search brings back the note that answers a question. It calls no model and only reads the atlas.
 
-```markdown
-# Varve brief: billing-api
-Today is Tue 2026-10-20, week 2026-W43. Days end at 04:00 local time.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/search-quality-dark.svg">
+    <img alt="Bar chart. Answer in the first five results: 97% on the author's atlas, 83% on 36 held-out hard questions, 75% on all 69 hard questions. Answer as the first result: 87%, 61% and 55%." src="docs/assets/search-quality-light.svg" width="100%">
+  </picture>
+</p>
 
-## Last session (2026-10-19)
-Moved invoice PDF rendering to a queue; retries now idempotent
+| Default search (keyword + meaning) | Answer first | Answer in the top five |
+|---|---|---|
+| Real work: the author's atlas, 200 questions | 87% | 97% |
+| Hard test: 36 held-out questions | 61% | 83% |
+| Hard test: all 69 questions | 55% | 75% |
 
-#### Decisions
-- Kept the existing S3 bucket; a new one would need a security review (2 weeks).
-- Retry key is invoice_id + version, so a re-render after an edit is not deduplicated.
+The two datasets bracket everyday use:
 
-#### Open threads
-- Load test with 10k invoices before Thursday's release.
-- Ask Dana whether credit notes need the same queue.
+- **Real work** asks about decisions and findings logged over four weeks of the author's daily work in Claude Code. The questions reuse words from their notes, so they flatter search.
+- **The hard test** is a bundled atlas of 26 invented sessions in three projects with 69 hand-written questions, the same on every machine. Most are reworded the way a colleague asks weeks later, without the note's distinctive words: "the spreadsheet download we got rid of" for a note about removing the CSV export. The 36 held-out questions were written after the defaults were chosen and never used to tune them.
 
-## This week (draft)
-- Mon 10-19: invoice rendering queue, idempotent retries
-- Tue 10-20: (today)
+An agent reads several results and can search again in other words, so "in the top five" is closer to whether it found what it needed than "first".
 
-## Last week: 2026-W42
-Shipped proration for mid-cycle plan changes. Found and fixed a rounding bug in
-EUR invoices (banker's rounding vs half-up). Decided to drop the legacy CSV export.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/by-kind-dark.svg">
+    <img alt="Grouped bar chart, answer in the first five results on the hard test. Reworded questions: 54% in 0.3.1, 71% now. Exact names or terms: 100% and 100%. Date ranges: 20% and 60%." src="docs/assets/by-kind-light.svg" width="100%">
+  </picture>
+</p>
 
-## Open
-- Load test with 10k invoices before Thursday's release. (logged 2026-10-19)
-- Decide whether credit notes need the same queue. (since 2026-10-14, [[Invoicing]])
+What the numbers say, and what they don't:
 
-## Changed this week
-- [[Invoicing]]: Invoice PDFs render on a worker queue.
-- [[Invoicing]]: replaced: Invoice PDFs render in the request.
+- **Names and exact terms are always found**: 12 of 12 on the hard test.
+- **Rewording is the weak spot.** Reworded questions found in the top five rose from 54% in 0.3.1 to 71%: search stopped ranking day and week drafts above the sessions they repeat, and matches by meaning were added. The search model is small (30 MB, no native code); a larger one would likely do better here.
+- **Date ranges are too few to judge.** Five questions, three found in the top five.
+- **The hard test is small and written by the author**, so treat it as a regression check. Reports from other people's atlases are the real measure: `varve bench` on your own atlas saves a report that holds numbers only, ready to [share](docs/BENCHMARK.md#send-your-results).
+- **The brief no longer drops todos.** In 0.4 it showed 0% of the todos logged in the last 14 days unless they were in the last session's open threads. 0.5 adds the Open section: 100% on both datasets, for about 20 to 40 more tokens.
 
-## Elsewhere this week
-- **payments-gateway**: Stripe webhook signature check moved to middleware
-```
+Method, mean reciprocal rank with 95% intervals, the threshold sweep, and how to send your results: [BENCHMARK.md](docs/BENCHMARK.md).
 
-When it needs more, it asks. "What did we decide about the CSV export?" runs `search`. "What happened in September?" runs `zoom`.
+## Measured on real work
 
-| You say | The agent calls |
+From the author's own atlas: 12 days of daily use (8 to 20 October 2026) across 11 scopes and 57 recorded conversations.
+
+| Measure | Result |
 |---|---|
-| "What were we doing on this?" | `brief` |
-| "What did we decide about the CSV export?" | `search` |
-| "Show me what happened in September." | `zoom` with `2026-09` |
-| "Tidy the atlas." | `pending`, then `summarize` and `seal` for each rollup |
-| "Keep this project hidden from the others." | `scopes` with `isolated` |
-| "This session is client-x work." | `log` with `scope: "client-x"`, which moves the session |
-| "That summary is wrong, we never dropped the export." | `amend` |
-| "What do we know about auth?" | `topic` |
-| "When did we switch to Okta, and why?" | `topic`, then `zoom` on the day its History line names |
+| Conversation text in those 57 conversations (tool output excluded) | about 1.25 million tokens |
+| The same conversations as activity, recorded without a model | about 26,000 tokens, **49x smaller** |
+| Activity per conversation per day | about 380 tokens |
+| Sessions the agent summarized itself, against their conversation text | 36x smaller |
+| Brief for the busiest project | about 1,600 tokens, built in under 100 ms |
+| Model calls made by the MCP server | 0 |
+| Day and week summaries written by `tidy` (Sonnet, 6 rollups) | 6 of 6 sealed, $0.13 in total |
+| Test suite | 160 tests on macOS, Linux and Windows, none call a model |
+
+Token counts are estimated at 4 characters per token, the same rule the server uses for its cost gate. Version 0.2 came out of these 12 days: see [what changed and why](docs/DESIGN.md#18-what-v02-changed-and-why).
 
 ## How it works
 
@@ -186,57 +191,58 @@ Rollups write them. The writer of a day, week or month note sees the scope's cur
 
 The brief carries the result: an **Open** section (open items from topics, and todos from the last two weeks that no rollup has read yet) and a **Changed this week** section.
 
-## Benchmark
+## What your agent sees
 
-`varve bench` measures how well the atlas brings back past work. It calls no model and only reads the atlas. On the bundled fixture (26 invented sessions in three projects, 69 hand-written questions) every machine gets the same scores. On your own atlas it saves a report that holds numbers only, ready to [share](docs/BENCHMARK.md#send-your-results).
+At the start of every session the agent receives a brief of its project. A shortened example:
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/search-quality-dark.svg">
-    <img alt="Bar chart. Mean reciprocal rank on all 69 fixture questions: 0.3.1 keyword 0.47, 0.4.0 keyword only 0.55, meaning only 0.44, keyword and meaning 0.64. On 36 held-out questions: 0.58, 0.61, 0.43 and 0.71." src="docs/assets/search-quality-light.svg" width="100%">
-  </picture>
-</p>
+```markdown
+# Varve brief: billing-api
+Today is Tue 2026-10-20, week 2026-W43. Days end at 04:00 local time.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/by-kind-dark.svg">
-    <img alt="Grouped bar chart. Mean reciprocal rank, 0.3.1 against 0.4.0: paraphrased questions 0.41 and 0.58, exact terms 0.84 and 1.00, date ranges 0.14 and 0.47." src="docs/assets/by-kind-light.svg" width="100%">
-  </picture>
-</p>
+## Last session (2026-10-19)
+Moved invoice PDF rendering to a queue; retries now idempotent
 
-| Fixture, mean reciprocal rank (95% interval) | All 69 questions | 36 held-out |
-|---|---|---|
-| 0.3.1, keyword | 0.47 (0.36 to 0.56) | 0.58 (0.44 to 0.72) |
-| 0.4.0, keyword only | 0.55 (0.44 to 0.65) | 0.61 (0.48 to 0.75) |
-| 0.4.0, meaning only | 0.44 (0.35 to 0.56) | 0.43 (0.28 to 0.60) |
-| **0.4.0, keyword + meaning (default)** | **0.64 (0.54 to 0.74)** | **0.71 (0.59 to 0.84)** |
+#### Decisions
+- Kept the existing S3 bucket; a new one would need a security review (2 weeks).
+- Retry key is invoice_id + version, so a re-render after an edit is not deduplicated.
 
-What the numbers say, and what they don't:
+#### Open threads
+- Load test with 10k invoices before Thursday's release.
+- Ask Dana whether credit notes need the same queue.
 
-- **Adding meaning to keyword search helps.** On the same questions it ranks the answer higher on 12 and lower on 5: +0.09 MRR (0.03 to 0.17) on all questions, +0.10 (0.01 to 0.22) on the held-out ones. Meaning alone is worse than keyword alone, so the two are fused.
-- **Exact terms and date ranges improved most** because search no longer returns day and week drafts, which repeat their sessions' text, above the session that holds the detail. The benchmark found that bug.
-- **The fixture is small and written by the author.** The 36 held-out questions were written after the defaults were chosen and never used to tune them, but treat the fixture as a regression check. Reports from real atlases are the real measure.
-- **On the author's own atlas** (126 sessions, known-item probes) keyword search already scores 0.94 MRR and fusing in meaning costs a little (0.92).
-- **The brief no longer drops todos.** In 0.4 it showed 0% of the todos logged in the last 14 days unless they were in the last session's open threads. 0.5 adds the Open section: 100% on the fixture and on the author's atlas, for about 20 to 40 more tokens.
+## This week (draft)
+- Mon 10-19: invoice rendering queue, idempotent retries
+- Tue 10-20: (today)
 
-Method, every number, and how to send your own results: [BENCHMARK.md](docs/BENCHMARK.md).
+## Last week: 2026-W42
+Shipped proration for mid-cycle plan changes. Found and fixed a rounding bug in
+EUR invoices (banker's rounding vs half-up). Decided to drop the legacy CSV export.
 
-## Measured on real work
+## Open
+- Load test with 10k invoices before Thursday's release. (logged 2026-10-19)
+- Decide whether credit notes need the same queue. (since 2026-10-14, [[Invoicing]])
 
-From the author's own atlas: 12 days of daily use (8 to 20 October 2026) across 11 scopes and 57 recorded conversations.
+## Changed this week
+- [[Invoicing]]: Invoice PDFs render on a worker queue.
+- [[Invoicing]]: replaced: Invoice PDFs render in the request.
 
-| Measure | Result |
+## Elsewhere this week
+- **payments-gateway**: Stripe webhook signature check moved to middleware
+```
+
+When it needs more, it asks. "What did we decide about the CSV export?" runs `search`. "What happened in September?" runs `zoom`.
+
+| You say | The agent calls |
 |---|---|
-| Conversation text in those 57 conversations (tool output excluded) | about 1.25 million tokens |
-| The same conversations as activity, recorded without a model | about 26,000 tokens, **49x smaller** |
-| Activity per conversation per day | about 380 tokens |
-| Sessions the agent summarized itself, against their conversation text | 36x smaller |
-| Brief for the busiest project | about 1,600 tokens, built in under 100 ms |
-| Model calls made by the MCP server | 0 |
-| Day and week summaries written by `tidy` (Sonnet, 6 rollups) | 6 of 6 sealed, $0.13 in total |
-| Test suite | 147 tests on macOS, Linux and Windows, none call a model |
-
-Token counts are estimated at 4 characters per token, the same rule the server uses for its cost gate. Version 0.2 came out of these 12 days: see [what changed and why](docs/DESIGN.md#18-what-v02-changed-and-why).
+| "What were we doing on this?" | `brief` |
+| "What did we decide about the CSV export?" | `search` |
+| "Show me what happened in September." | `zoom` with `2026-09` |
+| "Tidy the atlas." | `pending`, then `summarize` and `seal` for each rollup |
+| "Keep this project hidden from the others." | `scopes` with `isolated` |
+| "This session is client-x work." | `log` with `scope: "client-x"`, which moves the session |
+| "That summary is wrong, we never dropped the export." | `amend` |
+| "What do we know about auth?" | `topic` |
+| "When did we switch to Okta, and why?" | `topic`, then `zoom` on the day its History line names |
 
 ## Privacy and security
 
@@ -485,7 +491,7 @@ npm run compile    # rebuilds dist/, which is committed
 
 Tests use a fake clock, so they cover day boundaries, ISO weeks at year ends and sessions spanning several days without waiting. Integration tests start the real server and drive it through the MCP SDK client. Changes to search or the brief come with before and after scores from `varve bench --fixture`.
 
-Read [CONTRIBUTING.md](.github/CONTRIBUTING.md) before sending a change, [docs/DESIGN.md](docs/DESIGN.md) for the full design, [docs/CONTEXT.md](docs/CONTEXT.md) for the vocabulary, and [docs/adr/](docs/adr/) for the decisions behind it. Changes are listed in [CHANGELOG.md](docs/CHANGELOG.md).
+Anyone can send a change as a pull request from a fork; the maintainer reviews it and merges it. Read [CONTRIBUTING.md](.github/CONTRIBUTING.md) before sending one, [docs/DESIGN.md](docs/DESIGN.md) for the full design, [docs/CONTEXT.md](docs/CONTEXT.md) for the vocabulary, and [docs/adr/](docs/adr/) for the decisions behind it. Changes are listed in [CHANGELOG.md](docs/CHANGELOG.md).
 
 ## License
 

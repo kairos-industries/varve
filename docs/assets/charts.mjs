@@ -119,9 +119,11 @@ function hero(t) {
   return svg(W, H, t, parts.join("\n"), "Varve: sessions roll up into day, week, month and year notes, each shorter than the one below");
 }
 
-// ---- search quality: MRR with 95% intervals ----
+// ---- search quality: how often the answer is found, with 95% intervals ----
 
-function rows(width, items, t, { labelW = 250, valueW = 70 } = {}) {
+const pct = (v) => `${Math.round(v * 100)}%`;
+
+function rows(width, items, t, { labelW = 330, valueW = 70 } = {}) {
   const plotX = labelW;
   const plotW = width - labelW - valueW - 32;
   const rowH = 34;
@@ -129,15 +131,14 @@ function rows(width, items, t, { labelW = 250, valueW = 70 } = {}) {
   items.forEach((it, i) => {
     const y = i * rowH;
     const w = it.value * plotW;
-    parts.push(text(plotX - 14, y + 14, it.label, { size: 13, fill: it.strong ? t.ink : t.ink2, anchor: "end", weight: it.strong ? 600 : 400 }));
-    parts.push(bar(plotX, y + 2, w, 18, it.strong ? t.accent : t.neutral));
+    parts.push(text(plotX - 14, y + 14, it.label, { size: 13, fill: t.ink, anchor: "end", weight: 600 }));
+    parts.push(bar(plotX, y + 2, w, 18, t.accent));
     if (it.ci) {
       const [lo, hi] = it.ci.map((v) => plotX + v * plotW);
-      const c = it.strong ? t.ink : t.ink2;
-      parts.push(`<path d="M${lo},${y + 11} H${hi} M${lo},${y + 6} V${y + 16} M${hi},${y + 6} V${y + 16}" stroke="${c}" stroke-width="1.5" fill="none"/>`);
+      parts.push(`<path d="M${lo},${y + 11} H${hi} M${lo},${y + 6} V${y + 16} M${hi},${y + 6} V${y + 16}" stroke="${t.ink}" stroke-width="1.5" fill="none"/>`);
     }
     const end = plotX + Math.max(w, it.ci ? it.ci[1] * plotW : 0);
-    parts.push(text(end + 10, y + 15, it.value.toFixed(2), { size: 13, fill: t.ink, weight: it.strong ? 700 : 500 }));
+    parts.push(text(end + 10, y + 15, pct(it.value), { size: 13, fill: t.ink, weight: 700 }));
   });
   return { svg: parts.join("\n"), height: items.length * rowH, plotX, plotW };
 }
@@ -147,61 +148,60 @@ function axis(t, plotX, plotW, y0, height, ticks = [0, 0.25, 0.5, 0.75, 1]) {
   for (const v of ticks) {
     const x = plotX + v * plotW;
     parts.push(`<line x1="${x}" y1="${y0 - 6}" x2="${x}" y2="${y0 + height}" stroke="${v === 0 ? t.axis : t.grid}" stroke-width="1"/>`);
-    parts.push(text(x, y0 + height + 18, v.toFixed(2), { size: 11, fill: t.muted, anchor: "middle" }));
+    parts.push(text(x, y0 + height + 18, pct(v), { size: 11, fill: t.muted, anchor: "middle" }));
   }
   return parts.join("\n");
 }
 
 function searchQuality(t) {
-  const now = report("fixture-0.4.0").retrieval;
-  const before = report("fixture-0.3.1-behaviour").retrieval;
+  const fixture = report("fixture-0.5.0").retrieval;
+  const author = report("author-0.5.0").retrieval;
   const W = 880;
+  const datasets = [
+    { label: "Real work: the author's atlas, 200 questions", r: author.all },
+    { label: "Hard test: 36 held-out questions", r: fixture.test },
+    { label: "Hard test: all 69 questions", r: fixture.all },
+  ];
   const panels = [
-    { title: "All 69 questions", key: "all" },
-    { title: "36 held-out questions, written after the defaults were chosen", key: "test" },
+    { title: "Answer in the first five results", items: datasets.map((d) => ({ label: d.label, value: d.r.hybrid.hit5, ci: d.r.hybrid.hit5Ci })) },
+    { title: "Answer as the first result", items: datasets.map((d) => ({ label: d.label, value: d.r.hybrid.hit1 })) },
   ];
   const parts = [];
-  parts.push(text(32, 44, "Search quality on the benchmark fixture", { size: 20, fill: t.ink, weight: 700 }));
-  parts.push(text(32, 68, "Mean reciprocal rank of the note that answers the question (1.00 = always first). Whiskers: 95% bootstrap interval.", { size: 13, fill: t.ink2 }));
+  parts.push(text(32, 44, "How often search finds the right note", { size: 20, fill: t.ink, weight: 700 }));
+  parts.push(text(32, 68, "Default search (keyword + meaning), Varve 0.5.0. Whiskers: 95% bootstrap interval.", { size: 13, fill: t.ink2 }));
   let y = 112;
   for (const p of panels) {
     parts.push(text(32, y, p.title, { size: 14, fill: t.ink, weight: 600 }));
     y += 18;
-    const items = [
-      { label: "0.3.1, keyword", value: before[p.key].keyword.mrr, ci: before[p.key].keyword.mrrCi },
-      { label: "0.4.0, keyword only", value: now[p.key].keyword.mrr, ci: now[p.key].keyword.mrrCi },
-      { label: "0.4.0, meaning only", value: now[p.key].semantic.mrr, ci: now[p.key].semantic.mrrCi },
-      { label: "0.4.0, keyword + meaning", value: now[p.key].hybrid.mrr, ci: now[p.key].hybrid.mrrCi, strong: true },
-    ];
-    const r = rows(W, items, t);
+    const r = rows(W, p.items, t);
     parts.push(axis(t, r.plotX, r.plotW, y, r.height));
     parts.push(`<g transform="translate(0 ${y})">${r.svg}</g>`);
     y += r.height + 52;
   }
   const H = y - 10;
-  return svg(W, H, t, parts.join("\n"), "Bar chart of search quality: version 0.4.0 with keyword and meaning search scores highest on all questions and on held-out questions");
+  return svg(W, H, t, parts.join("\n"), "Bar chart: the answer is in the first five results for 97% of questions on the author's atlas, 83% of held-out hard questions and 75% of all hard questions; first for 87%, 61% and 55%");
 }
 
-// ---- by kind: 0.3.1 against 0.4.0 ----
+// ---- by kind: 0.3.1 against now ----
 
 function byKind(t) {
-  const now = report("fixture-0.4.0").retrieval;
+  const now = report("fixture-0.5.0").retrieval;
   const before = report("fixture-0.3.1-behaviour").retrieval;
   const W = 880;
   const kinds = [
-    { key: "paraphrase", label: "Paraphrased" },
-    { key: "exact", label: "Exact term" },
+    { key: "paraphrase", label: "Reworded" },
+    { key: "exact", label: "Exact name or term" },
     { key: "dated", label: "Date range" },
   ];
   const parts = [];
-  parts.push(text(32, 44, "Where 0.4.0 finds more", { size: 20, fill: t.ink, weight: 700 }));
-  parts.push(text(32, 68, "Mean reciprocal rank by kind of question, all 69 fixture questions.", { size: 13, fill: t.ink2 }));
+  parts.push(text(32, 44, "By kind of question", { size: 20, fill: t.ink, weight: 700 }));
+  parts.push(text(32, 68, "Answer in the first five results, all 69 hard-test questions.", { size: 13, fill: t.ink2 }));
   // Legend: two series, so always present.
   const ly = 96;
   parts.push(`<rect x="32" y="${ly - 10}" width="12" height="12" rx="3" fill="${t.neutral}"/>`);
-  parts.push(text(50, ly, "0.3.1 (keyword, drafts searched)", { size: 12, fill: t.ink2 }));
-  parts.push(`<rect x="262" y="${ly - 10}" width="12" height="12" rx="3" fill="${t.accent}"/>`);
-  parts.push(text(280, ly, "0.4.0 (keyword + meaning, the default)", { size: 12, fill: t.ink2 }));
+  parts.push(text(50, ly, "0.3.1 (keyword only)", { size: 12, fill: t.ink2 }));
+  parts.push(`<rect x="202" y="${ly - 10}" width="12" height="12" rx="3" fill="${t.accent}"/>`);
+  parts.push(text(220, ly, "0.5.0 (keyword + meaning, the default)", { size: 12, fill: t.ink2 }));
   const labelW = 210;
   const plotX = labelW;
   const plotW = W - labelW - 70 - 32;
@@ -213,16 +213,16 @@ function byKind(t) {
     const n = now[k.key].probes;
     parts.push(text(plotX - 14, y + 22, k.label, { size: 13, fill: t.ink, anchor: "end", weight: 600 }));
     parts.push(text(plotX - 14, y + 38, `${n} questions`, { size: 11, fill: t.muted, anchor: "end" }));
-    const a = before[k.key].keyword.mrr;
-    const b = now[k.key].hybrid.mrr;
+    const a = before[k.key].keyword.hit5;
+    const b = now[k.key].hybrid.hit5;
     // Two touching bars, separated by a 2px surface gap.
     parts.push(bar(plotX, y + 4, a * plotW, 18, t.neutral));
     parts.push(bar(plotX, y + 24, b * plotW, 18, t.accent));
-    parts.push(text(plotX + a * plotW + 8, y + 18, a.toFixed(2), { size: 12, fill: t.ink2 }));
-    parts.push(text(plotX + b * plotW + 8, y + 38, b.toFixed(2), { size: 12, fill: t.ink, weight: 700 }));
+    parts.push(text(plotX + a * plotW + 8, y + 18, pct(a), { size: 12, fill: t.ink2 }));
+    parts.push(text(plotX + b * plotW + 8, y + 38, pct(b), { size: 12, fill: t.ink, weight: 700 }));
   });
   const H = y0 + kinds.length * groupH + 30;
-  return svg(W, H, t, parts.join("\n"), "Grouped bar chart: 0.4.0 scores higher than 0.3.1 on paraphrased questions, exact terms and date ranges");
+  return svg(W, H, t, parts.join("\n"), "Grouped bar chart, answer in the first five results: reworded questions 54% in 0.3.1 and 71% now, exact names 100% and 100%, date ranges 20% and 60%");
 }
 
 for (const [mode, t] of Object.entries(THEMES)) {

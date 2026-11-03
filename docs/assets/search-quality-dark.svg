@@ -1,59 +1,48 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="880" height="514" viewBox="0 0 880 514" role="img" aria-label="Bar chart of search quality: version 0.4.0 with keyword and meaning search scores highest on all questions and on held-out questions" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
-<rect width="880" height="514" rx="12" fill="#1a1a19"/>
-<text x="32" y="44" font-size="20" font-weight="700" fill="#f0efec" text-anchor="start">Search quality on the benchmark fixture</text>
-<text x="32" y="68" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="start">Mean reciprocal rank of the note that answers the question (1.00 = always first). Whiskers: 95% bootstrap interval.</text>
-<text x="32" y="112" font-size="14" font-weight="600" fill="#f0efec" text-anchor="start">All 69 questions</text>
-<line x1="250" y1="124" x2="250" y2="266" stroke="#383835" stroke-width="1"/>
-<text x="250" y="284" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">0.00</text>
-<line x1="382" y1="124" x2="382" y2="266" stroke="#2c2c2a" stroke-width="1"/>
-<text x="382" y="284" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">0.25</text>
-<line x1="514" y1="124" x2="514" y2="266" stroke="#2c2c2a" stroke-width="1"/>
-<text x="514" y="284" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">0.50</text>
-<line x1="646" y1="124" x2="646" y2="266" stroke="#2c2c2a" stroke-width="1"/>
-<text x="646" y="284" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">0.75</text>
-<line x1="778" y1="124" x2="778" y2="266" stroke="#2c2c2a" stroke-width="1"/>
-<text x="778" y="284" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">1.00</text>
-<g transform="translate(0 130)"><text x="236" y="14" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="end">0.3.1, keyword</text>
-<path d="M250,2 H493.10400000000004 Q497.10400000000004,2 497.10400000000004,6 V16 Q497.10400000000004,20 493.10400000000004,20 H250 Z" fill="#5c5b56"/>
-<path d="M442.192,11 H545.152 M442.192,6 V16 M545.152,6 V16" stroke="#c3c2b7" stroke-width="1.5" fill="none"/>
-<text x="555.152" y="15" font-size="13" font-weight="500" fill="#f0efec" text-anchor="start">0.47</text>
-<text x="236" y="48" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="end">0.4.0, keyword only</text>
-<path d="M250,36 H537.456 Q541.456,36 541.456,40 V50 Q541.456,54 537.456,54 H250 Z" fill="#5c5b56"/>
-<path d="M483.376,45 H591.088 M483.376,40 V50 M591.088,40 V50" stroke="#c3c2b7" stroke-width="1.5" fill="none"/>
-<text x="601.088" y="49" font-size="13" font-weight="500" fill="#f0efec" text-anchor="start">0.55</text>
-<text x="236" y="82" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="end">0.4.0, meaning only</text>
-<path d="M250,70 H479.376 Q483.376,70 483.376,74 V84 Q483.376,88 479.376,88 H250 Z" fill="#5c5b56"/>
-<path d="M433.744,79 H548.3199999999999 M433.744,74 V84 M548.3199999999999,74 V84" stroke="#c3c2b7" stroke-width="1.5" fill="none"/>
-<text x="558.3199999999999" y="83" font-size="13" font-weight="500" fill="#f0efec" text-anchor="start">0.44</text>
-<text x="236" y="116" font-size="13" font-weight="600" fill="#f0efec" text-anchor="end">0.4.0, keyword + meaning</text>
-<path d="M250,104 H586.0319999999999 Q590.0319999999999,104 590.0319999999999,108 V118 Q590.0319999999999,122 586.0319999999999,122 H250 Z" fill="#3987e5"/>
-<path d="M537.232,113 H641.248 M537.232,108 V118 M641.248,108 V118" stroke="#f0efec" stroke-width="1.5" fill="none"/>
-<text x="651.248" y="117" font-size="13" font-weight="700" fill="#f0efec" text-anchor="start">0.64</text></g>
-<text x="32" y="318" font-size="14" font-weight="600" fill="#f0efec" text-anchor="start">36 held-out questions, written after the defaults were chosen</text>
-<line x1="250" y1="330" x2="250" y2="472" stroke="#383835" stroke-width="1"/>
-<text x="250" y="490" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">0.00</text>
-<line x1="382" y1="330" x2="382" y2="472" stroke="#2c2c2a" stroke-width="1"/>
-<text x="382" y="490" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">0.25</text>
-<line x1="514" y1="330" x2="514" y2="472" stroke="#2c2c2a" stroke-width="1"/>
-<text x="514" y="490" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">0.50</text>
-<line x1="646" y1="330" x2="646" y2="472" stroke="#2c2c2a" stroke-width="1"/>
-<text x="646" y="490" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">0.75</text>
-<line x1="778" y1="330" x2="778" y2="472" stroke="#2c2c2a" stroke-width="1"/>
-<text x="778" y="490" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">1.00</text>
-<g transform="translate(0 336)"><text x="236" y="14" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="end">0.3.1, keyword</text>
-<path d="M250,2 H554.88 Q558.88,2 558.88,6 V16 Q558.88,20 554.88,20 H250 Z" fill="#5c5b56"/>
-<path d="M484.432,11 H631.216 M484.432,6 V16 M631.216,6 V16" stroke="#c3c2b7" stroke-width="1.5" fill="none"/>
-<text x="641.216" y="15" font-size="13" font-weight="500" fill="#f0efec" text-anchor="start">0.58</text>
-<text x="236" y="48" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="end">0.4.0, keyword only</text>
-<path d="M250,36 H570.192 Q574.192,36 574.192,40 V50 Q574.192,54 570.192,54 H250 Z" fill="#5c5b56"/>
-<path d="M503.96799999999996,45 H644.944 M503.96799999999996,40 V50 M644.944,40 V50" stroke="#c3c2b7" stroke-width="1.5" fill="none"/>
-<text x="654.944" y="49" font-size="13" font-weight="500" fill="#f0efec" text-anchor="start">0.61</text>
-<text x="236" y="82" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="end">0.4.0, meaning only</text>
-<path d="M250,70 H473.568 Q477.568,70 477.568,74 V84 Q477.568,88 473.568,88 H250 Z" fill="#5c5b56"/>
-<path d="M396.784,79 H565.216 M396.784,74 V84 M565.216,74 V84" stroke="#c3c2b7" stroke-width="1.5" fill="none"/>
-<text x="575.216" y="83" font-size="13" font-weight="500" fill="#f0efec" text-anchor="start">0.43</text>
-<text x="236" y="116" font-size="13" font-weight="600" fill="#f0efec" text-anchor="end">0.4.0, keyword + meaning</text>
-<path d="M250,104 H622.4639999999999 Q626.4639999999999,104 626.4639999999999,108 V118 Q626.4639999999999,122 622.4639999999999,122 H250 Z" fill="#3987e5"/>
-<path d="M560.992,113 H694.048 M560.992,108 V118 M694.048,108 V118" stroke="#f0efec" stroke-width="1.5" fill="none"/>
-<text x="704.048" y="117" font-size="13" font-weight="700" fill="#f0efec" text-anchor="start">0.71</text></g>
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="446" viewBox="0 0 880 446" role="img" aria-label="Bar chart: the answer is in the first five results for 97% of questions on the author's atlas, 83% of held-out hard questions and 75% of all hard questions; first for 87%, 61% and 55%" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+<rect width="880" height="446" rx="12" fill="#1a1a19"/>
+<text x="32" y="44" font-size="20" font-weight="700" fill="#f0efec" text-anchor="start">How often search finds the right note</text>
+<text x="32" y="68" font-size="13" font-weight="400" fill="#c3c2b7" text-anchor="start">Default search (keyword + meaning), Varve 0.5.0. Whiskers: 95% bootstrap interval.</text>
+<text x="32" y="112" font-size="14" font-weight="600" fill="#f0efec" text-anchor="start">Answer in the first five results</text>
+<line x1="330" y1="124" x2="330" y2="232" stroke="#383835" stroke-width="1"/>
+<text x="330" y="250" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">0%</text>
+<line x1="442" y1="124" x2="442" y2="232" stroke="#2c2c2a" stroke-width="1"/>
+<text x="442" y="250" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">25%</text>
+<line x1="554" y1="124" x2="554" y2="232" stroke="#2c2c2a" stroke-width="1"/>
+<text x="554" y="250" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">50%</text>
+<line x1="666" y1="124" x2="666" y2="232" stroke="#2c2c2a" stroke-width="1"/>
+<text x="666" y="250" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">75%</text>
+<line x1="778" y1="124" x2="778" y2="232" stroke="#2c2c2a" stroke-width="1"/>
+<text x="778" y="250" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">100%</text>
+<g transform="translate(0 130)"><text x="316" y="14" font-size="13" font-weight="600" fill="#f0efec" text-anchor="end">Real work: the author's atlas, 200 questions</text>
+<path d="M330,2 H760.56 Q764.56,2 764.56,6 V16 Q764.56,20 760.56,20 H330 Z" fill="#3987e5"/>
+<path d="M755.5999999999999,11 H775.76 M755.5999999999999,6 V16 M775.76,6 V16" stroke="#f0efec" stroke-width="1.5" fill="none"/>
+<text x="785.76" y="15" font-size="13" font-weight="700" fill="#f0efec" text-anchor="start">97%</text>
+<text x="316" y="48" font-size="13" font-weight="600" fill="#f0efec" text-anchor="end">Hard test: 36 held-out questions</text>
+<path d="M330,36 H699.184 Q703.184,36 703.184,40 V50 Q703.184,54 699.184,54 H330 Z" fill="#3987e5"/>
+<path d="M640.912,45 H752.912 M640.912,40 V50 M752.912,40 V50" stroke="#f0efec" stroke-width="1.5" fill="none"/>
+<text x="762.912" y="49" font-size="13" font-weight="700" fill="#f0efec" text-anchor="start">83%</text>
+<text x="316" y="82" font-size="13" font-weight="600" fill="#f0efec" text-anchor="end">Hard test: all 69 questions</text>
+<path d="M330,70 H663.792 Q667.792,70 667.792,74 V84 Q667.792,88 663.792,88 H330 Z" fill="#3987e5"/>
+<path d="M622.096,79 H713.04 M622.096,74 V84 M713.04,74 V84" stroke="#f0efec" stroke-width="1.5" fill="none"/>
+<text x="723.04" y="83" font-size="13" font-weight="700" fill="#f0efec" text-anchor="start">75%</text></g>
+<text x="32" y="284" font-size="14" font-weight="600" fill="#f0efec" text-anchor="start">Answer as the first result</text>
+<line x1="330" y1="296" x2="330" y2="404" stroke="#383835" stroke-width="1"/>
+<text x="330" y="422" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">0%</text>
+<line x1="442" y1="296" x2="442" y2="404" stroke="#2c2c2a" stroke-width="1"/>
+<text x="442" y="422" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">25%</text>
+<line x1="554" y1="296" x2="554" y2="404" stroke="#2c2c2a" stroke-width="1"/>
+<text x="554" y="422" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">50%</text>
+<line x1="666" y1="296" x2="666" y2="404" stroke="#2c2c2a" stroke-width="1"/>
+<text x="666" y="422" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">75%</text>
+<line x1="778" y1="296" x2="778" y2="404" stroke="#2c2c2a" stroke-width="1"/>
+<text x="778" y="422" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">100%</text>
+<g transform="translate(0 302)"><text x="316" y="14" font-size="13" font-weight="600" fill="#f0efec" text-anchor="end">Real work: the author's atlas, 200 questions</text>
+<path d="M330,2 H715.76 Q719.76,2 719.76,6 V16 Q719.76,20 715.76,20 H330 Z" fill="#3987e5"/>
+<text x="729.76" y="15" font-size="13" font-weight="700" fill="#f0efec" text-anchor="start">87%</text>
+<text x="316" y="48" font-size="13" font-weight="600" fill="#f0efec" text-anchor="end">Hard test: 36 held-out questions</text>
+<path d="M330,36 H599.7280000000001 Q603.7280000000001,36 603.7280000000001,40 V50 Q603.7280000000001,54 599.7280000000001,54 H330 Z" fill="#3987e5"/>
+<text x="613.7280000000001" y="49" font-size="13" font-weight="700" fill="#f0efec" text-anchor="start">61%</text>
+<text x="316" y="82" font-size="13" font-weight="600" fill="#f0efec" text-anchor="end">Hard test: all 69 questions</text>
+<path d="M330,70 H572.848 Q576.848,70 576.848,74 V84 Q576.848,88 572.848,88 H330 Z" fill="#3987e5"/>
+<text x="586.848" y="83" font-size="13" font-weight="700" fill="#f0efec" text-anchor="start">55%</text></g>
 </svg>
