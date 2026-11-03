@@ -7,6 +7,7 @@ import { transcriptText } from "../sessions/transcript.js";
 import { lockHolder, releaseLock, takeLock } from "../store/lock.js";
 import { link, readNote, writeFrontmatter, writeNote } from "../store/note.js";
 import { isClosed, type Layer, parsePeriod, rangeOf } from "../time/index.js";
+import { topicDigest } from "../topics.js";
 
 export type RollupLayer = Layer | "session";
 
@@ -128,8 +129,17 @@ export function lengthTarget(atlas: Atlas, layer: RollupLayer): number {
   return layer === "session" ? atlas.config.lengthTargets.segment : atlas.config.lengthTargets[layer];
 }
 
-/** How the writer hands the summary back: through the seal tool, or as a plain reply (`temporal-atlas tidy`). */
+/** How the writer hands the summary back: through the seal tool, or as a plain reply (`varve tidy`). */
 export type WriteMode = "tool" | "reply";
+
+const TOPIC_GUIDE = [
+  "",
+  "Topics hold what stays true beyond this period, as claims (one sentence each, dated) and open items (still to do or decide). The current ones are listed under \"Topics in this scope\" with their ids.",
+  "- For a fact this period settled or changed (a decision taken, a system adopted, a number fixed), add a claim to the topic it belongs to. If it replaces a current claim, give that claim's id in replaces.",
+  "- For a current claim this period showed is no longer true, with nothing replacing it, put its id in close.",
+  "- For something left to do or decide at the end of the period, add an open item. For an open item that got done or decided, resolve it by id, saying how.",
+  "- Use an existing topic when one fits; name a new one only for a subject that will come up again. Skip anything that only mattered this period.",
+];
 
 function writingInstructions(item: PendingItem, target: number, mode: WriteMode): string {
   const what = item.layer === "session" ? `the summary of session ${item.period} from its transcript` : `the ${item.layer} note for ${item.period}`;
@@ -141,10 +151,10 @@ function writingInstructions(item: PendingItem, target: number, mode: WriteMode)
     "### Open threads",
     "Keep names, numbers, files and decisions. Drop chatter and anything already obvious from the headline.",
     "Link sources with [[note name]] where a reader may want the detail.",
+    ...(item.layer === "session" ? [] : TOPIC_GUIDE),
     ...(mode === "tool"
       ? [
-          `Then call seal with period "${item.period}", scope "${item.scope}", a one-line headline, and the content.`,
-          "If the material changes durable knowledge, add topic_updates to seal.",
+          `Then call seal with period "${item.period}", scope "${item.scope}", a one-line headline, and the content, plus topic_updates if any.`,
         ]
       : [
           "Activity sections were recorded from transcripts without a model: read the requests, files and commits to work out what was done. Requests and replies there are short excerpts by design; do not report them as truncated or missing.",
@@ -152,6 +162,11 @@ function writingInstructions(item: PendingItem, target: number, mode: WriteMode)
           "Headline: <one line, under 120 characters>",
           "",
           "<the note>",
+          "",
+          "If there are topic updates, end the reply with them as a JSON array in a fenced block, one object per topic:",
+          '```topics',
+          '[{"name": "Auth design", "claims": [{"text": "Enterprise users sign in through Okta with SAML.", "replaces": "c1a2b3"}], "close": [], "open": ["Decide the session lifetime for SAML users."], "resolve": [{"id": "o4d5e6", "how": "Set to 12 hours."}]}]',
+          "```",
         ]),
   ].join("\n");
 }
@@ -175,6 +190,8 @@ function sources(atlas: Atlas, item: PendingItem): string {
     const human = view.humanDraftText(item.period);
     if (human) parts.push("## Notes a human added to the draft", human);
   }
+  const topics = item.layer === "session" ? "" : topicDigest(atlas, item.scope);
+  if (topics) parts.push("## Topics in this scope (current claims and open items, with their ids)", topics);
   if (item.stale) {
     const amendments = /## Amendments\n([\s\S]*?)(?=\n## |$)/.exec(view.note(item.period)?.body ?? "")?.[1];
     if (amendments?.trim()) parts.push("## Amendments made to the previous version", amendments.trim());

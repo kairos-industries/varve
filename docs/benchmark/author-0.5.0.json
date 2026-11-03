@@ -1,0 +1,176 @@
+{
+  "benchmark": "varve",
+  "version": "0.5.0",
+  "dataset": "own",
+  "ranOn": "2026-11-03",
+  "platform": "darwin",
+  "node": "24.20.0",
+  "model": {
+    "name": "potion-base-8M",
+    "revision": "bf8b056651a2c21b8d2565580b8569da283cab23"
+  },
+  "settings": {
+    "minSimilarity": 0.35
+  },
+  "atlas": {
+    "scopes": 16,
+    "sessions": 126,
+    "notes": {
+      "day": 63,
+      "month": 20,
+      "session": 126,
+      "week": 30,
+      "year": 16
+    }
+  },
+  "retrieval": {
+    "event": {
+      "probes": 200,
+      "keyword": {
+        "hit1": 0.905,
+        "hit5": 0.98,
+        "mrr": 0.942,
+        "hit5Ci": [
+          0.96,
+          1
+        ],
+        "mrrCi": [
+          0.918,
+          0.97
+        ],
+        "ms": 6.9
+      },
+      "semantic": {
+        "hit1": 0.79,
+        "hit5": 0.91,
+        "mrr": 0.844,
+        "hit5Ci": [
+          0.87,
+          0.945
+        ],
+        "mrrCi": [
+          0.799,
+          0.889
+        ],
+        "ms": 5.5
+      },
+      "hybrid": {
+        "hit1": 0.87,
+        "hit5": 0.97,
+        "mrr": 0.916,
+        "hit5Ci": [
+          0.95,
+          0.995
+        ],
+        "mrrCi": [
+          0.883,
+          0.948
+        ],
+        "ms": 7.1
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": -0.026,
+        "ci95": [
+          -0.055,
+          0
+        ],
+        "better": 13,
+        "worse": 19
+      }
+    },
+    "all": {
+      "probes": 200,
+      "keyword": {
+        "hit1": 0.905,
+        "hit5": 0.98,
+        "mrr": 0.942,
+        "hit5Ci": [
+          0.96,
+          1
+        ],
+        "mrrCi": [
+          0.918,
+          0.97
+        ],
+        "ms": 6.9
+      },
+      "semantic": {
+        "hit1": 0.79,
+        "hit5": 0.91,
+        "mrr": 0.844,
+        "hit5Ci": [
+          0.87,
+          0.945
+        ],
+        "mrrCi": [
+          0.799,
+          0.889
+        ],
+        "ms": 5.5
+      },
+      "hybrid": {
+        "hit1": 0.87,
+        "hit5": 0.97,
+        "mrr": 0.916,
+        "hit5Ci": [
+          0.95,
+          0.995
+        ],
+        "mrrCi": [
+          0.883,
+          0.948
+        ],
+        "ms": 7.1
+      },
+      "hybridVsKeyword": {
+        "mrrDelta": -0.026,
+        "ci95": [
+          -0.055,
+          0
+        ],
+        "better": 13,
+        "worse": 19
+      }
+    }
+  },
+  "sweep": {
+    "0.20": {
+      "hit1": 0.875,
+      "hit5": 0.975,
+      "mrr": 0.922
+    },
+    "0.25": {
+      "hit1": 0.875,
+      "hit5": 0.975,
+      "mrr": 0.922
+    },
+    "0.30": {
+      "hit1": 0.875,
+      "hit5": 0.97,
+      "mrr": 0.92
+    },
+    "0.35": {
+      "hit1": 0.87,
+      "hit5": 0.97,
+      "mrr": 0.916
+    },
+    "0.40": {
+      "hit1": 0.87,
+      "hit5": 0.97,
+      "mrr": 0.917
+    },
+    "0.45": {
+      "hit1": 0.885,
+      "hit5": 0.965,
+      "mrr": 0.924
+    }
+  },
+  "brief": {
+    "scopes": 9,
+    "tokensMean": 939,
+    "tokensMax": 1423,
+    "ms": 7.8,
+    "todos": 4,
+    "todoRecall": 1
+  }
+}

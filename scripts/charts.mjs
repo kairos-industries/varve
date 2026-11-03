@@ -61,12 +61,12 @@ ${body}
 
 function hero(t) {
   const W = 1200;
-  const H = 400;
+  const H = 410;
   const parts = [];
   parts.push(text(64, 104, "MCP SERVER FOR CLAUDE CODE, CODEX AND ANY MCP CLIENT", { size: 13, fill: t.muted, weight: 600, extra: ` letter-spacing="1.2"` }));
-  parts.push(text(60, 178, "Temporal Atlas", { size: 68, fill: t.ink, weight: 700, extra: ` letter-spacing="-1.5"` }));
+  parts.push(text(60, 178, "Varve", { size: 68, fill: t.ink, weight: 700, extra: ` letter-spacing="-1.5"` }));
   parts.push(text(64, 228, "Your coding agent's memory of past work,", { size: 24, fill: t.ink2 }));
-  parts.push(text(64, 260, "organized by time.", { size: 24, fill: t.ink2 }));
+  parts.push(text(64, 260, "layered by time and by topic.", { size: 24, fill: t.ink2 }));
   parts.push(text(64, 324, "Plain Markdown on your disk  ·  no API key  ·  no cloud", { size: 15, fill: t.muted }));
 
   // Four weeks of work, Monday 7 September to Friday 2 October, as it rolls up.
@@ -81,9 +81,15 @@ function hero(t) {
     { name: "day", note: "~600 tokens" },
     { name: "session", note: "full detail" },
   ];
-  const top = 92;
+  const top = 104;
   const laneH = 44;
   const h = 18;
+  // A topic is a core taken through every layer: one subject, from the sessions up to the year.
+  // Drawn first, so the layers sit on top of it.
+  const coreX = x0 + 9 * dx - 6;
+  const coreW = 3 * dx + 12;
+  parts.push(`<rect x="${coreX.toFixed(1)}" y="${top - 10}" width="${coreW.toFixed(1)}" height="${lanes.length * laneH - 4}" rx="8" fill="${t.accent}" fill-opacity="0.12" stroke="${t.accent}" stroke-width="1.5" stroke-dasharray="0"/>`);
+  parts.push(text(coreX + coreW / 2, top - 18, "topic: Auth design", { size: 12, fill: t.ink2, anchor: "middle", weight: 600 }));
   lanes.forEach((lane, i) => {
     const y = top + i * laneH;
     const fill = t.layers[4 - i];
@@ -110,7 +116,7 @@ function hero(t) {
   const axisY = top + lanes.length * laneH + 6;
   parts.push(`<line x1="${x0}" y1="${axisY}" x2="${x0 + span}" y2="${axisY}" stroke="${t.axis}" stroke-width="1"/>`);
   ["Sep 7", "Sep 14", "Sep 21", "Sep 28"].forEach((l, w) => parts.push(text(x0 + w * 7 * dx, axisY + 18, l, { size: 11, fill: t.muted })));
-  return svg(W, H, t, parts.join("\n"), "Temporal Atlas: sessions roll up into day, week, month and year notes, each shorter than the one below");
+  return svg(W, H, t, parts.join("\n"), "Varve: sessions roll up into day, week, month and year notes, each shorter than the one below");
 }
 
 // ---- search quality: MRR with 95% intervals ----

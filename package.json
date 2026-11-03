@@ -1,11 +1,12 @@
 {
-  "name": "temporal-atlas",
-  "version": "0.4.0",
+  "name": "varve",
+  "version": "0.5.0",
   "private": true,
-  "description": "Time-layered memory for AI agents, served over MCP",
+  "description": "Your coding agent's memory of past work, layered by time and by topic. MCP server for Claude Code, Codex and any MCP client.",
   "license": "MIT",
   "type": "module",
   "bin": {
+    "varve": "dist/cli/main.js",
     "temporal-atlas": "dist/cli/main.js"
   },
   "files": [
@@ -45,6 +46,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pomess/temporal-atlas.git"
+    "url": "git+https://github.com/pomess/varve.git"
   }
 }

@@ -18,7 +18,7 @@ describe("brief", () => {
     t.at("2026-10-08T15:00:00+02:00");
     const brief = t.atlas.session({ cwd: t.cwd("alpha") }).brief();
 
-    expect(brief).toContain("# Atlas brief: alpha");
+    expect(brief).toContain("# Varve brief: alpha");
     expect(brief).toMatch(/## Last session[\s\S]*Thursday lexer work[\s\S]*unicode identifiers/);
     expect(brief).toMatch(/## Today[\s\S]*Thursday lexer work/);
     expect(brief).toMatch(/## Last worked day: Wed 2026-10-07[\s\S]*Wednesday parser work/);

@@ -104,7 +104,7 @@ export function search(atlas, input, opts = {}) {
     const model = opts.embedder ?? (atlas.config.semanticSearch && opts.mode !== "keyword" ? installedEmbedder() : undefined);
     const mode = opts.mode ?? (model ? "hybrid" : "keyword");
     if (mode !== "keyword" && !model)
-        throw new Error("Search by meaning needs the embedding model. Run `temporal-atlas models pull`.");
+        throw new Error("Search by meaning needs the embedding model. Run `varve models pull`.");
     const keep = (d) => (!input.layer || d.layer === input.layer) && (!input.from || d.last >= input.from) && (!input.to || d.first <= input.to);
     const docs = input.scopes.flatMap((s) => listMarkdown(atlas.paths.scopeDir(s)).map(toDoc)).filter((d) => Boolean(d) && keep(d));
     const byId = new Map(docs.map((d) => [d.id, d]));

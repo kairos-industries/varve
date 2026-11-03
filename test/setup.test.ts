@@ -1,4 +1,5 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Atlas } from "../src/atlas.js";
@@ -36,7 +37,7 @@ describe("setup", () => {
     const config = JSON.parse(readFileSync(join(dir, "atlas.config.json"), "utf8"));
     expect(config.isolateNewScopes).toBe(true);
     const add = f.calls.find((c) => c[2] === "add")!;
-    expect(add).toEqual(["/usr/local/bin/claude", "mcp", "add", "temporal-atlas", "--scope", "user", "-e", `TEMPORAL_ATLAS_DIR=${dir}`, "--", process.execPath, "/repo/dist/cli/main.js"]);
+    expect(add).toEqual(["/usr/local/bin/claude", "mcp", "add", "varve", "--scope", "user", "-e", `VARVE_DIR=${dir}`, "--", process.execPath, "/repo/dist/cli/main.js"]);
     const s = f.settings();
     expect(s.model).toBe("opus");
     expect(Object.keys(s.hooks).sort()).toEqual(["SessionEnd", "SessionStart", "Stop"]);
@@ -106,5 +107,34 @@ describe("client isolation", () => {
     expect(text).toContain("asked: Prepare the client-x workshop deck");
     expect(text).toContain("asked: Now the speaker notes");
     expect(text).toContain("note: This is client-x work");
+  });
+});
+
+describe("the rename to Varve", () => {
+  it("keeps the old environment variables, folder and hook commands working", async () => {
+    const { envVar, defaultDir } = await import("../src/names.js");
+    const { ATLAS_HOOK } = await import("../src/cli/install.js");
+    const { runHook } = await import("../src/cli/hook.js");
+    expect(envVar({ TEMPORAL_ATLAS_DIR: "/old" }, "DIR")).toBe("/old");
+    expect(envVar({ TEMPORAL_ATLAS_DIR: "/old", VARVE_DIR: "/new" }, "DIR")).toBe("/new");
+    const home = mkdtempSync(join(tmpdir(), "varve-home-"));
+    expect(defaultDir(home)).toBe(join(home, "Varve"));
+    mkdirSync(join(home, "TemporalAtlas"));
+    expect(defaultDir(home)).toBe(join(home, "TemporalAtlas"));
+    mkdirSync(join(home, "Varve"));
+    expect(defaultDir(home)).toBe(join(home, "Varve"));
+    expect(ATLAS_HOOK.test('node "/x/dist/cli/main.js" --dir "/a" hook stop')).toBe(true);
+    expect(ATLAS_HOOK.test("temporal-atlas hook stop")).toBe(true);
+    expect(ATLAS_HOOK.test("varve hook stop --client codex")).toBe(true);
+    const t = atlasSetup("2026-10-08T10:00:00+02:00");
+    expect(runHook(t.atlas, "stop", { session_id: "s" }, { TEMPORAL_ATLAS_CHILD: "1" })).toMatchObject({ result: "skipped" });
+    expect(runHook(t.atlas, "stop", { session_id: "s" }, { VARVE_CHILD: "1" })).toMatchObject({ result: "skipped" });
+  });
+
+  it("replaces a registration under the old name when setting up", async () => {
+    const t = atlasSetup("2026-10-08T10:00:00+02:00");
+    const f = fakeDeps(t.root);
+    await setup({ dir: join(t.root, "V"), script: "/repo/dist/cli/main.js", yes: true }, f.deps);
+    expect(f.calls).toContainEqual(["/usr/local/bin/claude", "mcp", "remove", "temporal-atlas", "--scope", "user"]);
   });
 });

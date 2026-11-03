@@ -75,7 +75,7 @@ describe("MCP server", () => {
     await call("log", { type: "change", text: "evening" });
     t.at("2026-10-08T09:00:00+02:00");
     const r = await call("log", { type: "change", text: "morning" });
-    expect(r.text).toContain("[Temporal Atlas checkpoint]");
+    expect(r.text).toContain("[Varve checkpoint]");
     expect(r.text).toContain('segment: "2026-10-07"');
   });
 });

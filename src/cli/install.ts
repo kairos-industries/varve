@@ -2,19 +2,20 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline/promises";
+import { NAME } from "../names.js";
 
 type HookEntry = { matcher?: string; hooks: { type: string; command: string; timeout?: number }[] };
 export type Settings = { hooks?: Record<string, HookEntry[]> } & Record<string, unknown>;
 
-/** Claude Code hook events and the `temporal-atlas hook` argument each one runs. */
+/** Claude Code hook events and the `varve hook` argument each one runs. */
 export const EVENTS: [string, string][] = [
   ["SessionStart", "session-start"],
   ["Stop", "stop"],
   ["SessionEnd", "session-end"],
 ];
 
-/** Matches both `node ".../cli/main.js" --dir "..." hook` and the older `TEMPORAL_ATLAS_DIR=... node ".../cli/main.js" hook`. */
-export const ATLAS_HOOK = /(temporal-atlas|cli[\\/]main\.js)\b.*\shook\b/;
+/** Matches both `node ".../cli/main.js" --dir "..." hook` and the older `VARVE_DIR=... node ".../cli/main.js" hook`, under either name. */
+export const ATLAS_HOOK = /(varve|temporal-atlas|cli[\\/]main\.js)\b.*\shook\b/;
 
 const isAtlasHook = (e: HookEntry) => e.hooks.some((h) => ATLAS_HOOK.test(h.command));
 
@@ -57,7 +58,7 @@ export function codexHooksPath(home = homedir()): string {
 
 /** How Codex should start the server, as `codex mcp add` arguments. */
 export function codexMcpArgs(atlasDir: string, script: string): string[] {
-  return ["mcp", "add", "temporal-atlas", "--env", `TEMPORAL_ATLAS_DIR=${atlasDir}`, "--", ...serverCommand(script)];
+  return ["mcp", "add", NAME, "--env", `VARVE_DIR=${atlasDir}`, "--", ...serverCommand(script)];
 }
 
 export const CODEX_TRUST_NOTE = "Codex runs new hooks only after you trust them: open Codex and run /hooks once.";
@@ -136,6 +137,6 @@ export async function installClaudeCode(opts: { atlasDir: string; script: string
   writeFileSync(path, `${JSON.stringify(after, null, 2)}\n`);
   console.log(`\nWritten. A backup of the previous file is at ${path}.bak`);
   console.log("\nIf the MCP server is not added yet, run:");
-  console.log(`  claude mcp add temporal-atlas --scope user -e TEMPORAL_ATLAS_DIR=${JSON.stringify(opts.atlasDir)} -- ${serverCommand(opts.script).map((a) => JSON.stringify(a)).join(" ")}`);
+  console.log(`  claude mcp add ${NAME} --scope user -e VARVE_DIR=${JSON.stringify(opts.atlasDir)} -- ${serverCommand(opts.script).map((a) => JSON.stringify(a)).join(" ")}`);
   return true;
 }

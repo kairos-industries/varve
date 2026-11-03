@@ -1,4 +1,4 @@
-# Temporal Atlas
+# Varve
 
 A memory for AI agents that records what was done across every conversation, layered by time. Recent work is kept in full detail; older work is kept as progressively shorter summaries.
 
@@ -7,7 +7,7 @@ A memory for AI agents that records what was done across every conversation, lay
 ### The store
 
 **Atlas**:
-The whole collection of notes the server reads and writes, stored as Markdown in one folder.
+The whole collection of notes Varve reads and writes, stored as Markdown in one folder. (The product was called Temporal Atlas; the word stays for the folder and the on-disk names: `atlas.config.json`, `.atlas/`, the `atlas:` frontmatter key.)
 _Avoid_: vault (reserved for the Obsidian vault the atlas may sit inside), memory, cache
 
 **Scope**:
@@ -22,8 +22,19 @@ A scope whose notes are visible only from sessions inside that scope.
 _Avoid_: private, confidential
 
 **Topic**:
-A note holding durable knowledge about one subject within a scope, with its current state on top and a dated timeline below.
+A note holding durable knowledge about one subject within a scope: its claims, open items and history, and a dated timeline.
 _Avoid_: entity, concept, knowledge note
+
+**Claim**:
+One line in a topic stating something true about it from a day on, with the note it came from and a block id (`^c1a2b3`).
+_Avoid_: fact, triple, memory
+
+**Open item**:
+One line in a topic naming something still to do or decide, from a day on, with a block id (`^o1a2b3`).
+_Avoid_: task, ticket
+
+**History**:
+The claims that were replaced or closed and the open items that were resolved, each with the days it held. Nothing in a topic is deleted.
 
 ### Time
 
@@ -102,7 +113,7 @@ A moment when the server looks for pending rollups: session start, a day change 
 _Avoid_: sync, maintenance run
 
 **Tidy**:
-A run of `temporal-atlas tidy` that writes pending rollups with `claude -p`, inside a token and dollar budget. A nightly tidy is one the user scheduled with `install nightly`.
+A run of `varve tidy` that writes pending rollups with `claude -p`, inside a token and dollar budget. A nightly tidy is one the user scheduled with `install nightly`.
 
 **Cost gate**:
 The token threshold above which pending rollups need the user's confirmation before the agent does them.

@@ -3,8 +3,62 @@ import { ScopeView, weekday } from "./periods.js";
 import { pending } from "./rollup/index.js";
 import { isIsolated } from "./scopes/index.js";
 import { hasContent, segmentHeadline } from "./sessions/note.js";
-import { link } from "./store/note.js";
+import { link, listMarkdown, noteName, readNote } from "./store/note.js";
+import { topicState } from "./topics.js";
 import { periodOf, previousPeriod, rangeOf } from "./time/index.js";
+function topicsOf(atlas, scope) {
+    return listMarkdown(atlas.paths.topicsDir(scope)).flatMap((p) => {
+        const n = readNote(p);
+        return n ? [{ name: String(n.fm.topic ?? noteName(p)), st: topicState(n.body) }] : [];
+    });
+}
+const OPEN_DAYS = 14;
+/**
+ * What is still open in a scope: the open items of its topics, and the todos logged in the last
+ * two weeks on days no rollup has read yet. Once a day is sealed, its rollup has carried the
+ * todos that were still open into topics, so the raw todos stop showing.
+ */
+export function openLines(atlas, view, topics, today) {
+    const out = [];
+    const seen = new Set();
+    const key = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    for (const t of topics) {
+        for (const o of t.st.open) {
+            seen.add(key(o.text));
+            out.push({ line: `- ${o.text} (since ${o.since}, [[${t.name}]])`, since: o.since });
+        }
+    }
+    const from = new Date(new Date(`${today}T12:00:00Z`).getTime() - OPEN_DAYS * 86400000).toISOString().slice(0, 10);
+    for (const s of view.sessions()) {
+        for (const seg of s.segments) {
+            if (seg.day < from || seg.day > today || view.isSealed(seg.day))
+                continue;
+            for (const e of seg.events.filter((x) => x.type === "todo")) {
+                if (seen.has(key(e.text)))
+                    continue;
+                seen.add(key(e.text));
+                out.push({ line: `- ${e.text} (logged ${seg.day})`, since: seg.day });
+            }
+        }
+    }
+    return out.sort((a, b) => b.since.localeCompare(a.since));
+}
+/** Claims that started, and claims and items that ended, on or after `from`. */
+export function changedLines(topics, from) {
+    const out = [];
+    for (const t of topics) {
+        for (const c of t.st.claims)
+            if (c.since >= from)
+                out.push({ line: `- [[${t.name}]]: ${c.text}`, day: c.since });
+        for (const h of t.st.history) {
+            if (!h.until || h.until < from)
+                continue;
+            const what = /resolved/.test(h.detail) ? "done" : /replaced/.test(h.detail) ? "replaced" : "no longer true";
+            out.push({ line: `- [[${t.name}]]: ${what}: ${h.text}`, day: h.until });
+        }
+    }
+    return out.sort((a, b) => b.day.localeCompare(a.day)).map((x) => x.line);
+}
 /** The "Open threads" part of a session summary, if the agent wrote one. */
 export function openThreads(summary) {
     if (!summary)
@@ -45,7 +99,7 @@ export function buildBrief(atlas, opts) {
     const isolated = isIsolated(scope, file) ? " (isolated)" : "";
     sections.push({
         key: "header",
-        title: `# Atlas brief: ${scope}${isolated}`,
+        title: `# Varve brief: ${scope}${isolated}`,
         body: `Today is ${weekday(today)} ${today}, week ${thisWeek}. Days end at ${atlas.config.dayBoundary} local time.`,
         priority: 0,
     });
@@ -66,6 +120,20 @@ export function buildBrief(atlas, opts) {
                 lines.push("", ...seg.events.slice(-10).map((e) => `- ${e.time} ${e.type}: ${e.text}`));
         }
         sections.push({ key: "last", title: `## Last session (${seg.day})`, body: lines.join("\n"), priority: 3 });
+    }
+    // Open, across topics and recent days
+    const topics = topicsOf(atlas, scope);
+    const open = openLines(atlas, view, topics, today);
+    if (open.length) {
+        const max = compact ? 6 : 15;
+        const more = open.length > max ? `\n- (${open.length - max} more; see the topics)` : "";
+        sections.push({ key: "open", title: "## Open", body: open.slice(0, max).map((o) => o.line).join("\n") + more, priority: 2 });
+    }
+    // What topics gained or lost this week
+    const changed = changedLines(topics, rangeOf(thisWeek).first);
+    if (changed.length) {
+        const max = compact ? 4 : 12;
+        sections.push({ key: "changed", title: "## Changed this week", body: changed.slice(0, max).join("\n") + (changed.length > max ? `\n- (${changed.length - max} more)` : ""), priority: 6 });
     }
     // Today
     const todays = view.segmentsOn(today);

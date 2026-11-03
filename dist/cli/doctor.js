@@ -21,7 +21,7 @@ export function installedHooks(settingsPath = join(homedir(), ".claude", "settin
     catch {
         return undefined;
     }
-    const found = EVENTS.filter(([event, arg]) => (hooks?.[event] ?? []).some((e) => (e.hooks ?? []).some((h) => new RegExp(`\\bhook\\s+${arg}\\b`).test(h.command ?? "") && /temporal-atlas|cli[\\/]main\.js/.test(h.command ?? "")))).map(([event]) => event);
+    const found = EVENTS.filter(([event, arg]) => (hooks?.[event] ?? []).some((e) => (e.hooks ?? []).some((h) => new RegExp(`\\bhook\\s+${arg}\\b`).test(h.command ?? "") && /varve|temporal-atlas|cli[\\/]main\.js/.test(h.command ?? "")))).map(([event]) => event);
     return found.length ? found : undefined;
 }
 export function doctor(atlas, opts = {}) {
@@ -85,24 +85,24 @@ export function doctor(atlas, opts = {}) {
         const since = nightly.lastRunAt ?? nightly.installedAt;
         const stalled = since !== undefined && now - Date.parse(since) > STALLED_MS;
         if (count && since === undefined) {
-            warnings.push(`${count} rollups are waiting and there is no record of the nightly run. Run \`temporal-atlas install nightly\` again: schedules from before 0.3 do not catch up when the computer was off at the set time.`);
+            warnings.push(`${count} rollups are waiting and there is no record of the nightly run. Run \`varve install nightly\` again: schedules from before 0.3 do not catch up when the computer was off at the set time.`);
         }
         else if (count && stalled) {
             const what = nightly.lastRunAt ? `has not run since ${nightly.lastRunAt.slice(0, 10)}` : `has not run since it was installed on ${since.slice(0, 10)}`;
-            warnings.push(`${count} rollups are waiting and the nightly run ${what}. Check .atlas/tidy.out, run \`temporal-atlas install nightly\` again, or run \`temporal-atlas tidy\`.`);
+            warnings.push(`${count} rollups are waiting and the nightly run ${what}. Check .atlas/tidy.out, run \`varve install nightly\` again, or run \`varve tidy\`.`);
         }
         else if (backlog > maxTokens) {
-            warnings.push(`${count} rollups are waiting (about ${backlog} tokens), more than one night's ${maxTokens}-token budget, so the nightly run will take several nights. Run \`temporal-atlas tidy\` to start now.`);
+            warnings.push(`${count} rollups are waiting (about ${backlog} tokens), more than one night's ${maxTokens}-token budget, so the nightly run will take several nights. Run \`varve tidy\` to start now.`);
         }
     }
     else if (backlog > atlas.config.costGateTokens) {
-        warnings.push(`${count} rollups are waiting (about ${backlog} tokens, over the ${atlas.config.costGateTokens}-token cost gate), so briefs show drafts. Ask your agent to tidy the atlas, run \`temporal-atlas tidy\`, or schedule it with \`temporal-atlas install nightly\`.`);
+        warnings.push(`${count} rollups are waiting (about ${backlog} tokens, over the ${atlas.config.costGateTokens}-token cost gate), so briefs show drafts. Ask your agent to tidy the atlas, run \`varve tidy\`, or schedule it with \`varve install nightly\`.`);
     }
     if (orphans.length) {
-        warnings.push(`${orphans.length} session(s) have a transcript but no record. Run \`temporal-atlas backfill\` to record them from their transcripts (no model, no cost).`);
+        warnings.push(`${orphans.length} session(s) have a transcript but no record. Run \`varve backfill\` to record them from their transcripts (no model, no cost).`);
     }
     if (hooks && !hooks.includes("Stop")) {
-        warnings.push("The Claude Code hooks are from an older version and do not record activity after each turn. Run `temporal-atlas install claude-code` again.");
+        warnings.push("The Claude Code hooks are from an older version and do not record activity after each turn. Run `varve install claude-code` again.");
     }
     if (openSessions.length)
         warnings.push(`${openSessions.length} session(s) have been open for more than 2 days.`);
@@ -140,7 +140,7 @@ export function formatDoctor(r) {
     lines.push(`Claude Code hooks: ${r.hooks ? r.hooks.join(", ") : "not installed"}`);
     if (r.codexHooks)
         lines.push(`Codex hooks: ${r.codexHooks.join(", ")}`);
-    lines.push(r.search === "hybrid" ? `Search: keyword and meaning (${MODEL.name})` : "Search: keyword only (run `temporal-atlas models pull` to match by meaning too)");
+    lines.push(r.search === "hybrid" ? `Search: keyword and meaning (${MODEL.name})` : "Search: keyword only (run `varve models pull` to match by meaning too)");
     if (r.rollups === "nightly")
         lines.push(`Rollups: nightly at ${r.tidyAt}; last scheduled run: ${r.lastScheduled ?? "none yet"}; last rollup written: ${r.lastTidy ?? "none yet"}`);
     if (r.openSessions.length)

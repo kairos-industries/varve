@@ -6,7 +6,10 @@ import { createInterface } from "node:readline/promises";
 import { type AtlasConfig, CONFIG_FILE } from "../config.js";
 import { AtlasPaths } from "../store/paths.js";
 
-export const LABEL = "io.temporal-atlas.tidy";
+export const LABEL = "io.varve.tidy";
+/** The launchd label before the rename; installing or removing the job also clears it. */
+const LEGACY_LABEL = "io.temporal-atlas.tidy";
+const TASK = "varve-tidy";
 
 /** Find an executable on PATH, as `which` would. On Windows, also tries the PATHEXT extensions (claude.exe, claude.cmd). */
 export function findOnPath(command: string, path = process.env.PATH ?? "", platform: NodeJS.Platform = process.platform): string | undefined {
@@ -78,7 +81,7 @@ ${args}
   </array>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>TEMPORAL_ATLAS_DIR</key>
+    <key>VARVE_DIR</key>
     <string>${xml(opts.atlasDir)}</string>
     <key>PATH</key>
     <string>${xml(opts.path)}</string>
@@ -107,14 +110,14 @@ ${args}
 export function cronLine(opts: { program: string[]; atlasDir: string; at: string; log: string }): string {
   const minute = Number(opts.at.split(":")[1]);
   const quote = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
-  return `${minute} * * * * TEMPORAL_ATLAS_DIR=${quote(opts.atlasDir)} ${opts.program.map(quote).join(" ")} >> ${quote(opts.log)} 2>&1`;
+  return `${minute} * * * * VARVE_DIR=${quote(opts.atlasDir)} ${opts.program.map(quote).join(" ")} >> ${quote(opts.log)} 2>&1`;
 }
 
 /** A Task Scheduler entry for Windows, with the atlas folder passed as --dir because tasks cannot set variables. */
 export function schtasksCommand(opts: { program: string[]; atlasDir: string; at: string }): string {
   const [node, script, ...rest] = opts.program;
   const run = [node, script, "--dir", opts.atlasDir].map((s) => `\\"${s}\\"`).concat(rest).join(" ");
-  return `schtasks /Create /TN "temporal-atlas-tidy" /SC HOURLY /ST ${opts.at.padStart(5, "0")} /TR "${run}" /F`;
+  return `schtasks /Create /TN "${TASK}" /SC HOURLY /ST ${opts.at.padStart(5, "0")} /TR "${run}" /F`;
 }
 
 /** Set `rollups` in atlas.config.json, keeping every other key. */
@@ -145,7 +148,7 @@ export interface NightlyOptions {
   log?: (line: string) => void;
 }
 
-/** Schedule `temporal-atlas tidy --scheduled` once a night, after the day boundary, catching up at login. */
+/** Schedule `varve tidy --scheduled` once a night, after the day boundary, catching up at login. */
 export async function installNightly(opts: NightlyOptions): Promise<boolean> {
   const log = opts.log ?? ((line: string) => console.log(line));
   const at = opts.at ?? opts.config.tidy.at;
@@ -157,7 +160,7 @@ export async function installNightly(opts: NightlyOptions): Promise<boolean> {
 
   if (platform === "win32") {
     if (opts.remove) {
-      log('Remove the task with: schtasks /Delete /TN "temporal-atlas-tidy" /F\nThen set "rollups": "agent" in atlas.config.json.');
+      log(`Remove the task with: schtasks /Delete /TN "${TASK}" /F (or "temporal-atlas-tidy" if it was installed before the rename)\nThen set "rollups": "agent" in atlas.config.json.`);
       return false;
     }
     log("Create the scheduled task with this command (it runs hourly from the set time and writes rollups once a day):\n");
@@ -169,7 +172,7 @@ export async function installNightly(opts: NightlyOptions): Promise<boolean> {
 
   if (platform !== "darwin") {
     if (opts.remove) {
-      log("Remove the temporal-atlas line from your crontab with `crontab -e`, and set \"rollups\": \"agent\" in atlas.config.json.");
+      log("Remove the varve (or temporal-atlas) line from your crontab with `crontab -e`, and set \"rollups\": \"agent\" in atlas.config.json.");
       return false;
     }
     log("Add this line with `crontab -e` (it runs hourly and writes rollups once a day, so a machine that was off catches up):\n");
@@ -180,8 +183,25 @@ export async function installNightly(opts: NightlyOptions): Promise<boolean> {
   }
 
   const plist = join(home, "Library", "LaunchAgents", `${LABEL}.plist`);
+  const legacyPlist = join(home, "Library", "LaunchAgents", `${LEGACY_LABEL}.plist`);
   const domain = `gui/${process.getuid?.() ?? 501}`;
+  const clearLegacy = () => {
+    if (!existsSync(legacyPlist)) return;
+    try {
+      execFileSync("launchctl", ["bootout", `${domain}/${LEGACY_LABEL}`], { stdio: "ignore" });
+    } catch {
+      // not loaded
+    }
+    rmSync(legacyPlist, { force: true });
+  };
   if (opts.remove) {
+    if (!existsSync(plist) && existsSync(legacyPlist)) {
+      clearLegacy();
+      rmSync(new AtlasPaths(opts.atlasDir).nightlyFile, { force: true });
+      setRollupMode(opts.atlasDir, "agent");
+      log("Removed. Agents will do rollups again.");
+      return true;
+    }
     if (!existsSync(plist)) {
       log("No nightly run is installed.");
       return false;
@@ -218,6 +238,7 @@ export async function installNightly(opts: NightlyOptions): Promise<boolean> {
   }
   mkdirSync(dirname(plist), { recursive: true });
   mkdirSync(dirname(logFile), { recursive: true });
+  clearLegacy();
   writeFileSync(plist, text);
   writeNightlyState(opts.atlasDir, { installedAt: (opts.now ?? new Date()).toISOString() });
   try {
@@ -227,6 +248,6 @@ export async function installNightly(opts: NightlyOptions): Promise<boolean> {
   }
   execFileSync("launchctl", ["bootstrap", domain, plist]);
   setRollupMode(opts.atlasDir, "nightly");
-  log(`\nInstalled. Remove it with: temporal-atlas install nightly --remove`);
+  log(`\nInstalled. Remove it with: varve install nightly --remove`);
   return true;
 }

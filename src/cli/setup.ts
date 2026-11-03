@@ -19,6 +19,7 @@ import {
 } from "./install.js";
 import { MODEL, modelInstalled, pullModel } from "../embed/index.js";
 import { findOnPath, installNightly } from "./nightly.js";
+import { LEGACY_NAME, NAME } from "../names.js";
 
 /**
  * One-command install and uninstall for Claude Code and Codex: the atlas folder, the MCP server
@@ -92,7 +93,7 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
   const claude = deps.claude ?? findOnPath("claude");
   const codex = findCodex(deps);
   const settings = settingsPath(deps.home);
-  log(`Temporal Atlas setup\n`);
+  log(`Varve setup\n`);
   log(`This will:`);
   log(`  1. Create the atlas at ${opts.dir} (existing notes are kept).`);
   if (claude) {
@@ -123,7 +124,7 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
     writeSettings(codex.hooks, mergeHooks(readSettings(codex.hooks), hookCommand(opts.dir, opts.script, deps.platform), { client: "codex", timeouts: CODEX_TIMEOUTS }));
     log(`Codex capture hooks installed in ${codex.hooks}. ${CODEX_TRUST_NOTE}`);
     if (codex.bin) {
-      deps.exec(codex.bin, ["mcp", "remove", "temporal-atlas"]);
+      for (const name of [NAME, LEGACY_NAME]) deps.exec(codex.bin, ["mcp", "remove", name]);
       const r = deps.exec(codex.bin, codexMcpArgs(opts.dir, opts.script));
       log(r.ok ? "MCP server registered with Codex." : `Could not register the MCP server with Codex: ${r.out.trim()}`);
     } else {
@@ -133,13 +134,14 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
 
   if (!claude) {
     const [command, ...args] = serverCommand(opts.script);
-    log(`\nAdd the server to your agent: command ${JSON.stringify(command)}, args ${JSON.stringify(args)}, env TEMPORAL_ATLAS_DIR=${JSON.stringify(opts.dir)}.`);
+    log(`\nAdd the server to your agent: command ${JSON.stringify(command)}, args ${JSON.stringify(args)}, env VARVE_DIR=${JSON.stringify(opts.dir)}.`);
     await offerModel(opts, deps);
     return true;
   }
 
-  deps.exec(claude, ["mcp", "remove", "temporal-atlas", "--scope", "user"]);
-  const added = deps.exec(claude, ["mcp", "add", "temporal-atlas", "--scope", "user", "-e", `TEMPORAL_ATLAS_DIR=${opts.dir}`, "--", ...serverCommand(opts.script)]);
+  // A registration under the old name would start a second server; replace it.
+  for (const name of [NAME, LEGACY_NAME]) deps.exec(claude, ["mcp", "remove", name, "--scope", "user"]);
+  const added = deps.exec(claude, ["mcp", "add", NAME, "--scope", "user", "-e", `VARVE_DIR=${opts.dir}`, "--", ...serverCommand(opts.script)]);
   log(added.ok ? "MCP server registered with Claude Code." : `Could not register the MCP server: ${added.out.trim()}`);
 
   writeSettings(settings, mergeHooks(readSettings(settings), hookCommand(opts.dir, opts.script, deps.platform)));
@@ -160,14 +162,14 @@ export async function setup(opts: SetupOptions, deps: SetupDeps = defaultDeps())
   await offerModel(opts, deps);
 
   log(`\nDone. Open a new Claude Code session in any project: the agent gets a brief of past work there.`);
-  log(`Check the install any time with: temporal-atlas doctor`);
-  log(`Remove it with: temporal-atlas uninstall (your notes stay in ${opts.dir})`);
+  log(`Check the install any time with: varve doctor`);
+  log(`Remove it with: varve uninstall (your notes stay in ${opts.dir})`);
   return true;
 }
 
 /** Search by meaning needs a 30 MB model from Hugging Face. Asked, never fetched with --yes. */
 async function offerModel(opts: SetupOptions, deps: SetupDeps) {
-  const later = "Search is keyword only for now. To match by meaning too, run: temporal-atlas models pull";
+  const later = "Search is keyword only for now. To match by meaning too, run: varve models pull";
   if (opts.yes || !deps.pullModel) {
     deps.log(`\n${later}`);
     return;
@@ -192,7 +194,7 @@ export async function uninstall(opts: { dir: string; script: string; yes: boolea
   const claude = deps.claude ?? findOnPath("claude");
   const codex = findCodex(deps);
   const settings = settingsPath(deps.home);
-  log("This removes the Temporal Atlas hooks from Claude Code and Codex, the MCP server registrations and the nightly run.");
+  log("This removes the Varve hooks from Claude Code and Codex, the MCP server registrations and the nightly run.");
   log(`Your notes in ${opts.dir} are not touched.\n`);
   if (!opts.yes && !(await deps.ask("Uninstall?", false))) {
     log("Nothing changed.");
@@ -203,16 +205,16 @@ export async function uninstall(opts: { dir: string; script: string; yes: boolea
     log(`Hooks removed from ${settings} (backup in settings.json.bak).`);
   }
   if (claude) {
-    const r = deps.exec(claude, ["mcp", "remove", "temporal-atlas", "--scope", "user"]);
-    log(r.ok ? "MCP server registration removed." : "No MCP server registration to remove.");
+    const removed = [NAME, LEGACY_NAME].map((name) => deps.exec(claude, ["mcp", "remove", name, "--scope", "user"]).ok);
+    log(removed.some(Boolean) ? "MCP server registration removed." : "No MCP server registration to remove.");
   }
   if (codex.hooks && existsSync(codex.hooks)) {
     writeSettings(codex.hooks, removeHooks(readSettings(codex.hooks)));
     log(`Hooks removed from ${codex.hooks} (backup in hooks.json.bak).`);
   }
   if (codex.bin) {
-    const r = deps.exec(codex.bin, ["mcp", "remove", "temporal-atlas"]);
-    log(r.ok ? "Codex MCP server registration removed." : "No Codex MCP server registration to remove.");
+    const removed = [NAME, LEGACY_NAME].map((name) => deps.exec(codex.bin!, ["mcp", "remove", name]).ok);
+    log(removed.some(Boolean) ? "Codex MCP server registration removed." : "No Codex MCP server registration to remove.");
   }
   await installNightly({ atlasDir: opts.dir, script: opts.script, config: loadConfig(opts.dir), yes: true, remove: true, platform: deps.platform, home: deps.home, log });
   log(`\nUninstalled. To delete your notes too, delete ${opts.dir}.`);
