@@ -4,6 +4,11 @@
 
 - **The repository moved to `kairos-industries/varve`.** `npm install -g github:pomess/varve` and old links still work, because GitHub redirects them.
 
+### Fixed
+
+- **Merging scopes keeps links working.** Links to the merged scope's day, week, month and year notes (`[[2026-10-08 old]]`, with an alias or heading too) now point at the renamed notes, in note bodies and in `sources`, across the atlas. A note a person edited still counts as edited afterwards.
+- **Merging scopes no longer maps folders that only lent it a session.** A session started in one project and filed under the merged scope by hand used to make every future session from that project go to the merged scope. Now only folders and remotes that went to the merged scope by their own name get a rule.
+
 ## 0.5.0
 
 Temporal Atlas is now **Varve**, and topic notes hold dated claims and open items, so the atlas is organized by topic as well as by time.
