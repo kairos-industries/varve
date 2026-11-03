@@ -50,7 +50,7 @@ Usage:
                                         --fixture            on the bundled example atlas instead, the same for everyone
                                         --json               print the report as JSON
                                         --out <file>         where to save the report (default .atlas/bench/)
-                                        --max <n>            at most this many probes from your atlas (default 200)
+                                        --max <n>            at most this many event and summary probes, and as many exact names (default 200)
                                         --sweep              also score search at several similarity thresholds
                                         --paraphrase         have a model reword the queries first (paid; asks first)
                                           --model <name>       default haiku
@@ -164,7 +164,8 @@ async function runBench(args: string[]) {
     save(r, reportDir);
     return;
   }
-  const probes = ownProbes(atlas, allScopes(atlas), max);
+  // A bare name has nothing to reword.
+  const probes = ownProbes(atlas, allScopes(atlas), max).filter((p) => p.kind !== "exact");
   const model = option(args, "--model") ?? "haiku";
   const maxUsd = number(args, "--max-usd", 0.25);
   console.log(`Paraphrasing ${probes.length} queries with ${model} through \`${atlas.config.tidy.command} -p\`: about ${paraphraseTokens(probes)} input tokens, stopped at $${maxUsd.toFixed(2)}.`);

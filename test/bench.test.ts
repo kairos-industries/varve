@@ -46,18 +46,35 @@ describe("benchmark", () => {
 
   it("builds probes from logged events, each searched in its own scope", () => {
     const t = worked();
-    const probes = ownProbes(t.atlas, allScopes(t.atlas));
+    const probes = ownProbes(t.atlas, allScopes(t.atlas)).filter((p) => p.kind === "event");
     expect(probes).toHaveLength(2);
     const ledger = probes.find((p) => p.query.startsWith("Keep the ledger"))!;
     expect(ledger).toMatchObject({ kind: "event", scopes: ["alpha"] });
     expect(probes.some((p) => p.query.includes("Dana"))).toBe(false);
   });
 
+  it("builds exact-name probes from names that appear in one note only", () => {
+    const t = setup("2026-10-08T10:00:00+02:00");
+    const a = t.atlas.session({ cwd: t.cwd("alpha") });
+    a.log({ type: "decision", text: "Move retries into `queue/worker.ts` and key them on invoice_id." });
+    a.closeSession({ headline: "Retries", summary: "### Done\n- Retries moved." });
+    const b = t.atlas.session({ cwd: t.cwd("alpha") });
+    b.log({ type: "finding", text: "LaunchDarkly flags gate the per-session rollout of invoice_id." });
+    b.closeSession({ headline: "Flags", summary: "### Done\n- Flags checked." });
+    const exact = ownProbes(t.atlas, allScopes(t.atlas)).filter((p) => p.kind === "exact");
+    // invoice_id is in both sessions, so it has no single answer; per-session is a word, not a name.
+    expect(exact.map((p) => p.query).sort()).toEqual(["LaunchDarkly", "queue/worker.ts"]);
+    const flags = exact.find((p) => p.query === "LaunchDarkly")!;
+    expect(flags.scopes).toEqual(["alpha"]);
+    expect(flags.relevant).toEqual([expect.stringMatching(new RegExp(`-${b.id}$`))]);
+    expect(exact.find((p) => p.query === "queue/worker.ts")!.relevant).toEqual([expect.stringMatching(new RegExp(`-${a.id}$`))]);
+  });
+
   it("reports numbers only: no note text, no scope or note names", () => {
     const t = worked();
     const r = benchOwn(t.atlas, { sweep: true });
     for (const s of strings(r)) expect(s).toMatch(ALLOWED);
-    expect(Object.keys(r.retrieval)).toEqual(["event", "all"]);
+    expect(Object.keys(r.retrieval)).toEqual(["event", "exact", "all"]);
     expect(r.retrieval.event!.keyword!.hit1).toBe(1);
     expect(r.brief).toMatchObject({ scopes: 2, todos: 1 });
   });

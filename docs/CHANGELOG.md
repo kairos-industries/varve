@@ -7,6 +7,7 @@ Temporal Atlas is now **Varve**, and topic notes hold dated claims and open item
 ### Added
 
 - **Claims, open items and history in topics.** Each line in a topic note has the day it started, the note it came from and an Obsidian block id. A replaced or closed claim, and a resolved item, moves to History with the day it ended; nothing is deleted. `seal`'s `topic_updates` and `topic` updates take `claims` (with `replaces`), `close`, `open` and `resolve`, and the server checks every id and day before writing. Rollup writers see the scope's current claims and open items with their ids. `tidy` reads them from a fenced `topics` block at the end of the reply, and skips a bad block with a warning instead of failing the rollup. See ADR 0010.
+- **Exact names in `bench` on your own atlas.** A name from a logged event that appears in no other note of its scope (a file, a path, an identifier, an acronym) becomes a probe that must find its session, up to 200 of them beside the event and summary probes. On the author's atlas, 96% of 200 names are in the top five.
 - **Open and Changed this week in the brief.** Open lists open items from topics and todos from the last 14 days that no rollup has read yet. On the benchmark, the share of recent todos the brief shows goes from 0% to 100% on the fixture and on the author's atlas, for about 20 to 40 more tokens.
 
 ### Changed
